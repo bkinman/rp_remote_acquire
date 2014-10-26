@@ -33,10 +33,11 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <errno.h>
+#include <unistd.h>
 
 int scope_init(void **mapped_io)
 {
-	int rpap_fd;
+	int rpad_fd;
 
 	rpad_fd = open("/dev/rpad_scope0", O_RDWR);
 	if (rpad_fd < 0) {

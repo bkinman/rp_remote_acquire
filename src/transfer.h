@@ -30,6 +30,8 @@
 #ifndef TRANSFER_H_
 #define TRANSFER_H_
 
+#include <stdlib.h>
+
 int connection_init(int tcp, const char *ip_addr, int ip_port);
 int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate);
 

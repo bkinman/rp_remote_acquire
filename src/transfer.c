@@ -42,6 +42,8 @@
 
 static int send_buffer(int sock_fd, const void *buf, size_t len);
 
+#define min(x, y) (((x) < (y)) ? (x) : (y))
+
 int connection_init(int tcp, const char *ip_addr, int ip_port)
 {
 	int sock_fd;
@@ -115,7 +117,7 @@ int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
 			 + (unsigned long long)end_time.tv_usec   / 1000ULL
 			 - (unsigned long long)start_time.tv_usec / 1000ULL;
 		printf("transferred %luB in %llums (rate %uMB/s)\n",
-		       transferred, duration,
+		       (long unsigned int)transferred, duration,
 		       (unsigned int)((1000ULL * transferred) / (duration * 1024 * 1024)));
 	}
 
