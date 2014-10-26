@@ -3,6 +3,28 @@
  *
  *  Created on: 7 Jun 2014
  *      Author: nils
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2014 bkinman, Nils Roos
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 #include <stddef.h>
@@ -10,35 +32,42 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "test.h"
+#include "scope.h"
+#include "transfer.h"
 
-static void parseArgs(int argv,char **argc);
+static void parseArgs(int argv, char **argc);
 
-static int          mbTCP = 0;
-static char        *mszRemoteAddr = "192.168.10.1";
-static int          miRemotePort = 14000;
-static unsigned int muBufSize = 16384;
-static unsigned int muKiloBytes = 500000;
+static int	tcp = 0;
+static char	*ip_addr = "192.168.10.1";
+static int	ip_port = 14000;
+static size_t	size = 1024 * 1024;
 
+int main(int argv, char **argc)
+{
+	int retval;
+	int sock_fd, rpad_fd;
+	void *mapped_io;
 
-int main(int argv,char **argc) {
-  int trc = 0;
+	parseArgs(argv,argc); /* TODO getopt all the parameters */
 
-  parseArgs(argv,argc);
+	if ((rpad_fd = scope_init(&mapped_io)) < 0)
+		return -1;
 
-  if( test_setup(mbTCP,mszRemoteAddr,miRemotePort,muBufSize,muKiloBytes) != 0 ) {
-    return -1;
-  }
+	/* TODO set up scope with acquisition parameters */
 
-  trc = test_test();
+	if ((sock_fd = connection_init(tcp, ip_addr, ip_port)) < 0) {
+		retval = -1;
+		goto cleanup;
+	}
 
-  printf("rc: %d\n",trc);
+	retval = transfer_data(sock_fd, rpad_fd, size, 1);
 
-  test_cleanup();
+cleanup:
+	scope_cleanup(rpad_fd, mapped_io);
+	close(sock_fd);
 
-  return 0;
+	return retval;
 }
-
 
 static void parseArgs(int argv,char **argc) {
   unsigned int i;
@@ -61,5 +90,3 @@ static void parseArgs(int argv,char **argc) {
     }
   }
 }
-
-
