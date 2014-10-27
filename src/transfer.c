@@ -36,10 +36,24 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
+#include <signal.h>
 
 static int send_buffer(int sock_fd, const char *buf, size_t len);
+static void int_handler(int sig);
 
 #define min(x, y) (((x) < (y)) ? (x) : (y))
+
+static volatile int interrupted = 0;
+static int sa_set = 0;
+static struct sigaction oldsa;
+static struct sigaction sa = {
+	.sa_handler = int_handler,
+};
+
+static void int_handler(int sig)
+{
+	interrupted = 1;
+}
 
 int connection_init(int tcp, const char *ip_addr, int ip_port)
 {
@@ -67,12 +81,24 @@ int connection_init(int tcp, const char *ip_addr, int ip_port)
 		goto error_close;
 	}
 
+	if (!sigaction(SIGINT, &sa, &oldsa))
+		sa_set = 1;
+	else
+		fprintf(stderr, "configuring signals failed (non-fatal), %d\n", errno);
+
 	return sock_fd;
 
 error_close:
 	close(sock_fd);
 error:
 	return -1;
+}
+
+void connection_cleanup(int sock_fd)
+{
+	if (sa_set)
+		sigaction(SIGINT, &oldsa, NULL);
+	close(sock_fd);
 }
 
 int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
@@ -95,14 +121,18 @@ int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
 
 		block_length = read(rpad_fd, buffer, block_length);
 		if (block_length < 0) {
-			fprintf(stderr, "rpad read failed, %d\n", errno);
-			retval = -1;
+			if (!interrupted) {
+				fprintf(stderr, "rpad read failed, %d\n", errno);
+				retval = -1;
+			}
 			break;
 		}
 
 		if (send_buffer(sock_fd, buffer, block_length) < 0) {
-			fprintf(stderr, "socket write failed, %d\n", errno);
-			retval = -1;
+			if (!interrupted) {
+				fprintf(stderr, "socket write failed, %d\n", errno);
+				retval = -1;
+			}
 			break;
 		}
 
@@ -129,7 +159,7 @@ static int send_buffer(int sock_fd, const char *buf, size_t len)
 
 	for (pos = 0; pos < len; pos += sent) {
 		sent = send(sock_fd, buf + pos, len - pos, 0);
-		if (sent < 0) {
+		if (sent < 0 || interrupted) {
 			retval = -1;
 			break;
 		}

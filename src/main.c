@@ -111,7 +111,7 @@ int main(int argc, char **argv)
 	}
 
 	retval = transfer_data(sock_fd, rpad_fd, g_options.kbytes_to_transfer*1024, 1);
-	close(sock_fd);
+	connection_cleanup(sock_fd);
 
 cleanup:
 	scope_cleanup(rpad_fd, mapped_io);
