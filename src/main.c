@@ -85,11 +85,6 @@ static option_fields_t g_options =
 		.kbytes_to_transfer = 0,
 };
 
-//static int	tcp = 0;
-//static char	*ip_addr = "192.168.10.1";
-//static int	ip_port = 14000;
-//static size_t	size = 1024 * 1024;
-
 /******************************************************************************
  * non-static function definitions
  ******************************************************************************/
@@ -116,10 +111,10 @@ int main(int argc, char **argv)
 	}
 
 	retval = transfer_data(sock_fd, rpad_fd, g_options.kbytes_to_transfer*1024, 1);
+	close(sock_fd);
 
 cleanup:
 	scope_cleanup(rpad_fd, mapped_io);
-	close(sock_fd);
 
 	return retval;
 }
@@ -187,4 +182,4 @@ static void usage(void)
            "\n");
     printf("Examples:\n");
     printf("\t Insert example here\n");
-};
+}

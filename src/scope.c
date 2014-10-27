@@ -28,11 +28,10 @@
  */
 
 #include <stddef.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <errno.h>
 #include <unistd.h>
 
 int scope_init(void **mapped_io)
@@ -41,14 +40,14 @@ int scope_init(void **mapped_io)
 
 	rpad_fd = open("/dev/rpad_scope0", O_RDWR);
 	if (rpad_fd < 0) {
-		printf("ERR: open scope %d\n", errno);
+		fprintf(stderr, "open scope failed, %d\n", errno);
 		return -1;
 	}
 
 	*mapped_io = mmap(NULL, 0x00100000UL, PROT_WRITE | PROT_READ,
 	                  MAP_SHARED, rpad_fd, 0x40100000UL);
 	if (*mapped_io == MAP_FAILED) {
-		printf("WRN: mmap scope %d\n", errno);
+		fprintf(stderr, "mmap scope failed (non-fatal), %d\n", errno);
 		*mapped_io = NULL;
 	}
 

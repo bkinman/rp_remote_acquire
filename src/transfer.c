@@ -28,10 +28,7 @@
  */
 
 #include <stddef.h>
-#include <stdlib.h>
-#include <math.h>
 #include <stdio.h>
-#include <fcntl.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -40,7 +37,7 @@
 #include <time.h>
 #include <sys/time.h>
 
-static int send_buffer(int sock_fd, const void *buf, size_t len);
+static int send_buffer(int sock_fd, const char *buf, size_t len);
 
 #define min(x, y) (((x) < (y)) ? (x) : (y))
 
@@ -54,7 +51,7 @@ int connection_init(int tcp, const char *ip_addr, int ip_port)
 
 	sock_fd = socket(PF_INET, tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
 	if (sock_fd < 0) {
-		printf("ERR: socket %d\n", errno);
+		fprintf(stderr, "create socket failed, %d\n", errno);
 		goto error;
 	}
 
@@ -66,7 +63,7 @@ int connection_init(int tcp, const char *ip_addr, int ip_port)
 
 	rc = connect(sock_fd, (struct sockaddr *)&server, sizeof(server));
 	if (rc < 0) {
-		printf("ERR: connect %d\n", errno);
+		fprintf(stderr, "connect failed, %d\n", errno);
 		goto error_close;
 	}
 
@@ -98,13 +95,13 @@ int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
 
 		block_length = read(rpad_fd, buffer, block_length);
 		if (block_length < 0) {
-			printf("ERR: read %d\n", errno);
+			fprintf(stderr, "rpad read failed, %d\n", errno);
 			retval = -1;
 			break;
 		}
 
 		if (send_buffer(sock_fd, buffer, block_length) < 0) {
-			printf("ERR: write %d\n", errno);
+			fprintf(stderr, "socket write failed, %d\n", errno);
 			retval = -1;
 			break;
 		}
@@ -112,7 +109,7 @@ int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
 		transferred += block_length;
 	}
 
-	if (report_rate && gettimeofday(&end_time, NULL)) {
+	if (report_rate && !gettimeofday(&end_time, NULL)) {
 		duration = (unsigned long long)(end_time.tv_sec - start_time.tv_sec) * 1000ULL
 			 + (unsigned long long)end_time.tv_usec   / 1000ULL
 			 - (unsigned long long)start_time.tv_usec / 1000ULL;
@@ -124,7 +121,7 @@ int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
 	return retval;
 }
 
-static int send_buffer(int sock_fd, const void *buf, size_t len)
+static int send_buffer(int sock_fd, const char *buf, size_t len)
 {
 	int retval = 0;
 	int sent;
