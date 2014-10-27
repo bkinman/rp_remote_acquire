@@ -45,14 +45,13 @@
 /******************************************************************************
  * Typedefs
  ******************************************************************************/
-static struct option long_options[] =
+static struct option g_long_options[] =
 {
     {"address",            optional_argument, NULL, 'a'},
     {"port",               optional_argument, NULL, 'p'},
-    {"udp",			       optional_argument, NULL, 'u'},
+    {"udp",			       no_argument,       NULL, 'u'},
     {"kbytes_to_transfer", optional_argument, NULL, 'k'},
-    {"help",               optional_argument, NULL, 'h'},
-
+    {"help",               no_argument,       NULL, 'h'},
     {NULL, 0, NULL, 0}
 };
 
@@ -100,6 +99,7 @@ int main(int argc, char **argv)
         exit(1);
     }
 
+
 	if ((rpad_fd = scope_init(&mapped_io)) < 0)
 		return -1;
 
@@ -124,9 +124,9 @@ cleanup:
  ******************************************************************************/
 static int handle_options(int argc, char *argv[])
 {
-    char ch;
+    int ch;
 
-    while ((ch = getopt_long(argc, argv, "a:p:uk:h", long_options, NULL)) != -1)
+    while ((ch = getopt_long(argc, argv, "a:p:uk:h", g_long_options, NULL)) != -1)
     {
         // check to see if a single character or long option came through
         switch (ch)
@@ -162,7 +162,7 @@ static int check_options(void)
     	return 1;
     }
 
-    if(0 != strncmp(g_options.address, "", sizeof(g_options.address)) )
+    if(0 == strncmp(g_options.address, "", sizeof(g_options.address)) )
     {
     	fprintf(stderr,"No ip address provided (use -a)\n");
     	return 1;
