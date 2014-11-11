@@ -32,7 +32,10 @@
 
 #include <stdlib.h>
 
-int connection_init(int tcp, const char *ip_addr, int ip_port);
+/* If is_client, return server socket file descriptor
+ * otherwise returns return client socket file descriptor
+ */
+int connection_init(int tcp, int is_client, const char *ip_addr, int ip_port);
 void connection_cleanup(int sock_fd);
 int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate);
 

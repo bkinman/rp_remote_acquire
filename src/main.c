@@ -49,6 +49,7 @@ static struct option g_long_options[] =
 {
     {"address",            optional_argument, NULL, 'a'},
     {"port",               optional_argument, NULL, 'p'},
+    {"mode",			   optional_argument, NULL, 'm'},
     {"udp",			       no_argument,       NULL, 'u'},
     {"kbytes_to_transfer", optional_argument, NULL, 'k'},
     {"help",               no_argument,       NULL, 'h'},
@@ -59,6 +60,7 @@ struct option_fields_
 {
     char address[16];
     int port;
+    int is_client;
     size_t kbytes_to_transfer;
     uint8_t tcp;
 };
@@ -78,10 +80,11 @@ static void usage(void);
 static option_fields_t g_options =
 {
 		/* Setting defaults */
-		.port = 14000,
 		.address = "",
-		.tcp = 1,
+		.port = 14000,
+		.is_client = 1,
 		.kbytes_to_transfer = 0,
+		.tcp = 1,
 };
 
 /******************************************************************************
@@ -105,7 +108,7 @@ int main(int argc, char **argv)
 
 	/* TODO set up scope with acquisition parameters */
 
-	if ((sock_fd = connection_init(g_options.tcp, g_options.address, g_options.port)) < 0) {
+	if ((sock_fd = connection_init(g_options.tcp, g_options.is_client, g_options.address, g_options.port)) < 0) {
 		retval = -1;
 		goto cleanup;
 	}
@@ -138,7 +141,10 @@ static int handle_options(int argc, char *argv[])
             case 'p': //Port
                 g_options.port = atoi(optarg);
                 break;
-            case 'u': //udp mode
+            case 'm': //Mode
+            	g_options.is_client = strcmp("client",optarg)?0:1;
+            	break;
+            case 'u': //udp
             	g_options.tcp = 0;
                 break;
             case 'k': //number of bytes to transfer
@@ -162,11 +168,19 @@ static int check_options(void)
     	return 1;
     }
 
-    if(0 == strncmp(g_options.address, "", sizeof(g_options.address)) )
+    if(g_options.is_client)
     {
-    	fprintf(stderr,"No ip address provided (use -a)\n");
-    	return 1;
+		if(0 == strncmp(g_options.address, "", sizeof(g_options.address)) )
+		{
+			fprintf(stderr,"No ip address provided (use -a)\n");
+			return 1;
+		}
     }
+    else
+    {
+    	strcpy(g_options.address,"127.0.0.1");
+    }
+
     return 0;
 }
 

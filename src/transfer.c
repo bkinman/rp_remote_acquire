@@ -38,11 +38,24 @@
 #include <sys/time.h>
 #include <signal.h>
 
+/******************************************************************************
+ * Defines
+ ******************************************************************************/
+#define min(x, y) (((x) < (y)) ? (x) : (y))
+
+/******************************************************************************
+ * Typedefs
+ ******************************************************************************/
+
+/******************************************************************************
+ * static function prototypes
+ ******************************************************************************/
 static int send_buffer(int sock_fd, const char *buf, size_t len);
 static void int_handler(int sig);
 
-#define min(x, y) (((x) < (y)) ? (x) : (y))
-
+/******************************************************************************
+ * static variables
+ ******************************************************************************/
 static volatile int interrupted = 0;
 static int sa_set = 0;
 static struct sigaction oldsa;
@@ -50,20 +63,21 @@ static struct sigaction sa = {
 	.sa_handler = int_handler,
 };
 
-static void int_handler(int sig)
-{
-	interrupted = 1;
-}
+static int sock_fd = -1;
+static int client_sock_fd = -1;
 
-int connection_init(int tcp, const char *ip_addr, int ip_port)
+/******************************************************************************
+ * non-static function definitions
+ ******************************************************************************/
+int connection_init(int is_tcp, int is_client, const char *ip_addr, int ip_port)
 {
-	int sock_fd;
-	struct sockaddr_in server;
+	struct sockaddr_in server, cli_addr;
 	int rc;
 
-	printf("create socket for %s\n", tcp ? "TCP" : "UDP");
+	printf("Creating %s %s\n", is_tcp ? "TCP" : "UDP", is_client?"CLIENT":"SERVER");
 
-	sock_fd = socket(PF_INET, tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
+	sock_fd = socket(PF_INET, is_tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
+
 	if (sock_fd < 0) {
 		fprintf(stderr, "create socket failed, %d\n", errno);
 		goto error;
@@ -73,12 +87,39 @@ int connection_init(int tcp, const char *ip_addr, int ip_port)
 	server.sin_addr.s_addr = inet_addr(ip_addr);
 	server.sin_port = htons(ip_port);
 
-	printf("connecting to %s:%i\n", ip_addr, ip_port);
+	if(is_client)
+	{
+		printf("connecting to %s:%i\n", ip_addr, ip_port);
 
-	rc = connect(sock_fd, (struct sockaddr *)&server, sizeof(server));
-	if (rc < 0) {
-		fprintf(stderr, "connect failed, %d\n", errno);
-		goto error_close;
+		rc = connect(sock_fd, (struct sockaddr *)&server, sizeof(server));
+		if (rc < 0)
+		{
+			fprintf(stderr, "connect failed, %d\n", errno);
+			goto error_close;
+		}
+	}
+	else
+	{
+		 socklen_t clilen;
+		 server.sin_addr.s_addr = INADDR_ANY;
+	     if (bind(sock_fd, (struct sockaddr *) &server, sizeof(server)) < 0)
+	     {
+	    	 fprintf(stderr, "bind failed, %d\n",errno);
+	         goto error_close;
+	     }
+	     if(listen(sock_fd,5) < 0)
+	     {
+	    	 fprintf(stderr, "listen failed, %d\n",errno);
+	    	 goto error_close;
+	     }
+
+	     clilen = sizeof(cli_addr);
+	     client_sock_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &clilen);
+	     if(client_sock_fd < 0)
+	     {
+	    	 fprintf(stderr, "accept failed, %d\n",errno);
+	    	 goto error_close;
+	     }
 	}
 
 	if (!sigaction(SIGINT, &sa, &oldsa))
@@ -86,10 +127,14 @@ int connection_init(int tcp, const char *ip_addr, int ip_port)
 	else
 		fprintf(stderr, "configuring signals failed (non-fatal), %d\n", errno);
 
-	return sock_fd;
+	if(is_client)
+		return sock_fd;
+	else
+		return client_sock_fd;
 
 error_close:
 	close(sock_fd);
+	close(client_sock_fd);
 error:
 	return -1;
 }
@@ -99,6 +144,7 @@ void connection_cleanup(int sock_fd)
 	if (sa_set)
 		sigaction(SIGINT, &oldsa, NULL);
 	close(sock_fd);
+	close(client_sock_fd);
 }
 
 int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
@@ -151,6 +197,9 @@ int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
 	return retval;
 }
 
+/******************************************************************************
+ * static function definitions
+ ******************************************************************************/
 static int send_buffer(int sock_fd, const char *buf, size_t len)
 {
 	int retval = 0;
@@ -166,4 +215,9 @@ static int send_buffer(int sock_fd, const char *buf, size_t len)
 	}
 
 	return retval;
+}
+
+static void int_handler(int sig)
+{
+	interrupted = 1;
 }
