@@ -1,8 +1,8 @@
 /*
- * transfer.h
+ * options.h
  *
- *  Created on: 9 Jun 2014
- *      Author: nils
+ *  Created on: 17 Nov 2014
+ *      Author: bkinman
  *
  * The MIT License (MIT)
  *
@@ -27,20 +27,31 @@
  * SOFTWARE.
  */
 
-#ifndef TRANSFER_H_
-#define TRANSFER_H_
+#ifndef OPTIONS_H_
+#define OPTIONS_H_
 
-#include <stdlib.h>
+enum mode_e {
+	server = 0,
+	client,
+	file,
+	on_the_fly_test,
+};
 
-#include "options.h"
-#include "scope.h"
+struct option_fields_
+{
+    char address[16];
+    int port;
+    int tcp;
+    enum mode_e mode;
+    size_t kbytes_to_transfer;
+    int report_rate;
+    int scope_chn;
+    int scope_dec;
+};
+typedef struct option_fields_ option_fields_t;
 
-/* If is_client, return server socket file descriptor
- * otherwise returns return client socket file descriptor
- */
-int connection_init(option_fields_t *options);
-void connection_cleanup(int sock_fd);
-int transfer_data(int sock_fd, struct scope_parameter *param,
-                  option_fields_t *options);
+int handle_options(int argc, char *argv[], option_fields_t *options);
+int check_options(option_fields_t *options);
+void usage(void);
 
-#endif /* TRANSFER_H_ */
+#endif /* OPTIONS_H_ */

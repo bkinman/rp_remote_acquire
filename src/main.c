@@ -37,6 +37,7 @@
 
 #include "scope.h"
 #include "transfer.h"
+#include "options.h"
 
 /******************************************************************************
  * Defines
@@ -45,46 +46,25 @@
 /******************************************************************************
  * Typedefs
  ******************************************************************************/
-static struct option g_long_options[] =
-{
-    {"address",            optional_argument, NULL, 'a'},
-    {"port",               optional_argument, NULL, 'p'},
-    {"mode",			   optional_argument, NULL, 'm'},
-    {"udp",			       no_argument,       NULL, 'u'},
-    {"kbytes_to_transfer", optional_argument, NULL, 'k'},
-    {"help",               no_argument,       NULL, 'h'},
-    {NULL, 0, NULL, 0}
-};
-
-struct option_fields_
-{
-    char address[16];
-    int port;
-    int is_client;
-    size_t kbytes_to_transfer;
-    uint8_t tcp;
-};
-typedef struct option_fields_ option_fields_t;
 
 /******************************************************************************
  * static function prototypes
  ******************************************************************************/
-static int handle_options(int argc, char *argv[]);
-static int check_options(void);
-static void usage(void);
 
 /******************************************************************************
  * static variables
  ******************************************************************************/
-
 static option_fields_t g_options =
 {
 		/* Setting defaults */
 		.address = "",
 		.port = 14000,
-		.is_client = 1,
-		.kbytes_to_transfer = 0,
 		.tcp = 1,
+		.mode = client,
+		.kbytes_to_transfer = 0,
+		.report_rate = 0,
+		.scope_chn = 0,
+		.scope_dec = 32,
 };
 
 /******************************************************************************
@@ -93,107 +73,32 @@ static option_fields_t g_options =
 int main(int argc, char **argv)
 {
 	int retval;
-	int sock_fd, rpad_fd;
-	void *mapped_io;
+	int sock_fd = -1;
+	struct scope_parameter param;
 
-    if(0 != handle_options(argc,argv))
+    if(0 != handle_options(argc,argv, &g_options))
     {
         usage();
         exit(1);
     }
 
 
-	if ((rpad_fd = scope_init(&mapped_io)) < 0)
+	if (scope_init(&param, &g_options))
 		return -1;
 
-	/* TODO set up scope with acquisition parameters */
+	if (g_options.mode == client || g_options.mode == server)
+		if ((sock_fd = connection_init(&g_options)) < 0) {
+			retval = -1;
+			goto cleanup;
+		}
 
-	if ((sock_fd = connection_init(g_options.tcp, g_options.is_client, g_options.address, g_options.port)) < 0) {
-		retval = -1;
-		goto cleanup;
-	}
+	retval = transfer_data(sock_fd, &param, &g_options);
 
-	retval = transfer_data(sock_fd, rpad_fd, g_options.kbytes_to_transfer*1024, 1);
-	connection_cleanup(sock_fd);
+	if (g_options.mode == client || g_options.mode == server)
+		connection_cleanup(sock_fd);
 
 cleanup:
-	scope_cleanup(rpad_fd, mapped_io);
+	scope_cleanup(&param);
 
 	return retval;
-}
-
-/******************************************************************************
- * static function definitions
- ******************************************************************************/
-static int handle_options(int argc, char *argv[])
-{
-    int ch;
-
-    while ((ch = getopt_long(argc, argv, "a:p:uk:h", g_long_options, NULL)) != -1)
-    {
-        // check to see if a single character or long option came through
-        switch (ch)
-        {
-            case 'a': //Address
-                strncpy(g_options.address, optarg ,sizeof(g_options.address));
-                g_options.address[sizeof(g_options.address)-1]= '\0';
-                break;
-            case 'p': //Port
-                g_options.port = atoi(optarg);
-                break;
-            case 'm': //Mode
-            	g_options.is_client = strcmp("client",optarg)?0:1;
-            	break;
-            case 'u': //udp
-            	g_options.tcp = 0;
-                break;
-            case 'k': //number of bytes to transfer
-            	g_options.kbytes_to_transfer = atoll(optarg);
-            	break;
-            case '?':
-            case 'h':
-                usage();
-                break;
-        }
-    }
-
-    return check_options();
-}
-
-static int check_options(void)
-{
-    if(g_options.port <1)
-    {
-    	fprintf(stderr,"Port number invalid, or not selected (use -p)\n");
-    	return 1;
-    }
-
-    if(g_options.is_client)
-    {
-		if(0 == strncmp(g_options.address, "", sizeof(g_options.address)) )
-		{
-			fprintf(stderr,"No ip address provided (use -a)\n");
-			return 1;
-		}
-    }
-    else
-    {
-    	strcpy(g_options.address,"127.0.0.1");
-    }
-
-    return 0;
-}
-
-static void usage(void)
-{
-    printf("Usage:  rp_remote_acquire [-habpu]\n");
-    printf(
-             "  -h  --help Display this usage information\n"
-             "  -a  --address [ip_address]\n"
-             "  -b  --bytes_to_transfer [num_bytes] number of bytes to transfer\n"
-    		 "  -p  --port [port_num] port number\b"
-             "  -u  --udp indicates tool should use udp mode\n"
-           "\n");
-    printf("Examples:\n");
-    printf("\t Insert example here\n");
 }

@@ -30,7 +30,20 @@
 #ifndef SCOPE_H_
 #define SCOPE_H_
 
-int scope_init(void **mapped_io);
-void scope_cleanup(int rpad_fd, void *mapped_io);
+#include "options.h"
+
+struct scope_parameter {
+	int	scope_fd;
+	int	channel;
+	int	decimation;
+	void	*mapped_io;
+	void	*mapped_buf_a;
+	size_t	buf_a_size;
+	void	*mapped_buf_b;
+	size_t	buf_b_size;
+};
+
+int scope_init(struct scope_parameter *param, option_fields_t *options);
+void scope_cleanup(struct scope_parameter *param);
 
 #endif /* SCOPE_H_ */

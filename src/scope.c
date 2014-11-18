@@ -34,30 +34,81 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-int scope_init(void **mapped_io)
-{
-	int rpad_fd;
+#include "options.h"
+#include "scope.h"
 
-	rpad_fd = open("/dev/rpad_scope0", O_RDWR);
-	if (rpad_fd < 0) {
+int scope_init(struct scope_parameter *param, option_fields_t *options)
+{
+	off_t buf_a_addr, buf_b_addr;
+	int decimation = options->scope_dec;
+
+	param->channel = options->scope_chn;
+	param->scope_fd = open("/dev/rpad_scope0", O_RDWR);
+	if (param->scope_fd < 0) {
 		fprintf(stderr, "open scope failed, %d\n", errno);
 		return -1;
 	}
 
-	*mapped_io = mmap(NULL, 0x00100000UL, PROT_WRITE | PROT_READ,
-	                  MAP_SHARED, rpad_fd, 0x40100000UL);
-	if (*mapped_io == MAP_FAILED) {
-		fprintf(stderr, "mmap scope failed (non-fatal), %d\n", errno);
-		*mapped_io = NULL;
+	param->mapped_io = mmap(NULL, 0x00100000UL, PROT_WRITE | PROT_READ,
+	                        MAP_SHARED, param->scope_fd, 0x40100000UL);
+	if (param->mapped_io == MAP_FAILED) {
+		fprintf(stderr, "mmap scope io failed (non-fatal), %d\n",
+		        errno);
+		param->mapped_io = NULL;
 	}
 
-	return rpad_fd;
+	if (param->channel == 0) {
+		/* TODO get phys addr and size from sysfs */
+		buf_a_addr = 0x00000000;
+		param->buf_a_size = 0x00200000;
+		param->mapped_buf_a = mmap(NULL, param->buf_a_size, PROT_READ,
+					   MAP_SHARED, param->scope_fd,
+					   buf_a_addr);
+		if (param->mapped_buf_a == MAP_FAILED) {
+			fprintf(stderr,
+			        "mmap scope ddr a failed (non-fatal), %d\n",
+				errno);
+			param->mapped_buf_a = NULL;
+		}
+	} else {
+		/* TODO get phys addr and size from sysfs */
+		buf_b_addr = 0x00200000;
+		param->buf_b_size = 0x00200000;
+		param->mapped_buf_b = mmap(NULL, param->buf_b_size, PROT_READ,
+					   MAP_SHARED, param->scope_fd,
+					   buf_b_addr);
+		if (param->mapped_buf_b == MAP_FAILED) {
+			fprintf(stderr,
+			        "mmap scope ddr b failed (non-fatal), %d\n",
+				errno);
+			param->mapped_buf_b = NULL;
+		}
+	}
+
+	for (param->decimation = 1; decimation; decimation >>= 1)
+		param->decimation <<= 1;
+	param->decimation >>= 1;
+
+	if (param->mapped_io) {
+		// set up scope decimation
+		*(unsigned long *)(param->mapped_io + 0x14) = param->decimation;
+		if (param->decimation)
+			*(unsigned long *)(param->mapped_io + 0x28) = 1;
+	}
+
+	return 0;
 }
 
-void scope_cleanup(int rpad_fd, void *mapped_io)
+void scope_cleanup(struct scope_parameter *param)
 {
-	if (mapped_io)
-		munmap(mapped_io, 0x00100000UL);
+	if (param->mapped_io)
+		munmap(param->mapped_io, 0x00100000UL);
 
-	close(rpad_fd);
+	if (param->mapped_buf_a)
+		munmap(param->mapped_buf_a, param->buf_a_size);
+
+	if (param->mapped_buf_b)
+		munmap(param->mapped_buf_b, param->buf_b_size);
+
+	close(param->scope_fd);
 }

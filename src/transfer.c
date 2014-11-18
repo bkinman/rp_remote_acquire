@@ -38,6 +38,9 @@
 #include <sys/time.h>
 #include <signal.h>
 
+#include "options.h"
+#include "scope.h"
+
 /******************************************************************************
  * Defines
  ******************************************************************************/
@@ -50,8 +53,14 @@
 /******************************************************************************
  * static function prototypes
  ******************************************************************************/
-static int send_buffer(int sock_fd, const char *buf, size_t len);
 static void int_handler(int sig);
+static u_int64_t transfer_readwrite(int sock_fd, struct scope_parameter *param,
+                                    option_fields_t *options);
+static u_int64_t transfer_mmap(int sock_fd, struct scope_parameter *param,
+                               option_fields_t *options);
+static u_int64_t transfer_mmapfile(struct scope_parameter *param,
+                                   option_fields_t *options);
+static int send_buffer(int sock_fd, const char *buf, size_t len);
 
 /******************************************************************************
  * static variables
@@ -69,14 +78,15 @@ static int client_sock_fd = -1;
 /******************************************************************************
  * non-static function definitions
  ******************************************************************************/
-int connection_init(int is_tcp, int is_client, const char *ip_addr, int ip_port)
+int connection_init(option_fields_t *options)
 {
 	struct sockaddr_in server, cli_addr;
 	int rc;
 
-	printf("Creating %s %s\n", is_tcp ? "TCP" : "UDP", is_client?"CLIENT":"SERVER");
+	printf("Creating %s %s\n", options->tcp ? "TCP" : "UDP",
+	       options->mode == client ? "CLIENT" : "SERVER");
 
-	sock_fd = socket(PF_INET, is_tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
+	sock_fd = socket(PF_INET, options->tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
 
 	if (sock_fd < 0) {
 		fprintf(stderr, "create socket failed, %d\n", errno);
@@ -84,12 +94,12 @@ int connection_init(int is_tcp, int is_client, const char *ip_addr, int ip_port)
 	}
 
 	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = inet_addr(ip_addr);
-	server.sin_port = htons(ip_port);
+	server.sin_addr.s_addr = inet_addr(options->address);
+	server.sin_port = htons(options->port);
 
-	if(is_client)
+	if(options->mode == client)
 	{
-		printf("connecting to %s:%i\n", ip_addr, ip_port);
+		printf("connecting to %s:%i\n", options->address, options->port);
 
 		rc = connect(sock_fd, (struct sockaddr *)&server, sizeof(server));
 		if (rc < 0)
@@ -127,14 +137,16 @@ int connection_init(int is_tcp, int is_client, const char *ip_addr, int ip_port)
 	else
 		fprintf(stderr, "configuring signals failed (non-fatal), %d\n", errno);
 
-	if(is_client)
+	if(options->mode == client)
 		return sock_fd;
 	else
 		return client_sock_fd;
 
 error_close:
-	close(sock_fd);
-	close(client_sock_fd);
+	if (sock_fd >= 0)
+		close(sock_fd);
+	if (client_sock_fd >= 0)
+		close(client_sock_fd);
 error:
 	return -1;
 }
@@ -147,51 +159,36 @@ void connection_cleanup(int sock_fd)
 	close(client_sock_fd);
 }
 
-int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
+int transfer_data(int sock_fd, struct scope_parameter *param,
+                  option_fields_t *options)
 {
 	int retval = 0;
-	size_t transferred = 0;
-	unsigned long long duration = 0ULL;
+	unsigned long duration = 0UL;
+	u_int64_t transferred = 0ULL;
 	struct timeval start_time, end_time;
-	int block_length;
-	char buffer[16384];
+	int report_rate = options->report_rate;
 
 	if (report_rate && gettimeofday(&start_time, NULL))
 		report_rate = 0;
 
-	while (!size || transferred < size) {
-		if (!size)
-			block_length = sizeof(buffer);
+	if (options->mode == client || options->mode == server) {
+		if (0)
+			transferred = transfer_readwrite(sock_fd, param, options);
 		else
-			block_length = min(sizeof(buffer), size - transferred);
-
-		block_length = read(rpad_fd, buffer, block_length);
-		if (block_length < 0) {
-			if (!interrupted) {
-				fprintf(stderr, "rpad read failed, %d\n", errno);
-				retval = -1;
-			}
-			break;
-		}
-
-		if (send_buffer(sock_fd, buffer, block_length) < 0) {
-			if (!interrupted) {
-				fprintf(stderr, "socket write failed, %d\n", errno);
-				retval = -1;
-			}
-			break;
-		}
-
-		transferred += block_length;
+			transferred = transfer_mmap(sock_fd, param, options);
+	} else if (options->mode == file) {
+		transferred = transfer_mmapfile(param, options);
+	} else if (options->mode == on_the_fly_test) {
+		/* TODO */
 	}
 
 	if (report_rate && !gettimeofday(&end_time, NULL)) {
-		duration = (unsigned long long)(end_time.tv_sec - start_time.tv_sec) * 1000ULL
-			 + (unsigned long long)end_time.tv_usec   / 1000ULL
-			 - (unsigned long long)start_time.tv_usec / 1000ULL;
-		printf("transferred %luB in %llums (rate %uMB/s)\n",
-		       (long unsigned int)transferred, duration,
-		       (unsigned int)((1000ULL * transferred) / (duration * 1024 * 1024)));
+		duration = 1000UL * (end_time.tv_sec - start_time.tv_sec)
+			 + (unsigned long)end_time.tv_usec   / 1000UL
+			 - (unsigned long)start_time.tv_usec / 1000UL;
+		printf("transferred %lluB in %lums (rate %.2fMB/s)\n",
+		       transferred, duration,
+		       (double)(1000ULL * transferred) / (1024ULL * 1024ULL * duration));
 	}
 
 	return retval;
@@ -200,6 +197,155 @@ int transfer_data(int sock_fd, int rpad_fd, size_t size, int report_rate)
 /******************************************************************************
  * static function definitions
  ******************************************************************************/
+static void int_handler(int sig)
+{
+	interrupted = 1;
+}
+
+static u_int64_t transfer_readwrite(int sock_fd, struct scope_parameter *param,
+                                    option_fields_t *options)
+{
+	u_int64_t transferred = 0ULL;
+	u_int64_t size = 1024ULL * options->kbytes_to_transfer;
+	int block_length;
+	char buffer[16384];
+
+	while (!size || transferred < size) {
+		if (!size)
+			block_length = sizeof(buffer);
+		else
+			block_length = min(sizeof(buffer), size - transferred);
+
+		block_length = read(param->scope_fd, buffer, block_length);
+		if (block_length < 0) {
+			if (!interrupted) {
+				fprintf(stderr, "rpad read failed, %d\n", errno);
+			}
+			break;
+		}
+
+		if (send_buffer(sock_fd, buffer, block_length) < 0) {
+			if (!interrupted) {
+				fprintf(stderr, "socket write failed, %d\n", errno);
+			}
+			break;
+		}
+
+		transferred += block_length;
+	}
+
+	return transferred;
+}
+
+#define CHUNK 150000
+static u_int64_t transfer_mmap(int sock_fd, struct scope_parameter *param,
+                               option_fields_t *options)
+{
+	u_int64_t transferred = 0ULL;
+	u_int64_t size = 1024ULL * options->kbytes_to_transfer;
+	unsigned long pos;
+	size_t len;
+	unsigned long curr;
+	unsigned long *curr_addr;
+	unsigned long base;
+	void *mapped_base;
+	size_t buf_size;
+
+	curr_addr = param->mapped_io + (options->scope_chn ? 0x118 : 0x114);
+	base = *(unsigned long *)(param->mapped_io +
+                                  (options->scope_chn ? 0x10c : 0x104));
+	mapped_base = options->scope_chn ? param->mapped_buf_b
+	                                 : param->mapped_buf_a;
+	buf_size = options->scope_chn ? param->buf_b_size : param->buf_a_size;
+
+	pos = 0;
+	while (!size || transferred < size) {
+		if (pos == buf_size)
+			pos = 0;
+
+		curr = *curr_addr - base;
+
+		if (pos + CHUNK <= curr) {
+			len = CHUNK;
+		} else if (pos > curr) {
+			if (pos + CHUNK <= buf_size) {
+				len = CHUNK;
+			} else {
+				len = buf_size - pos;
+			}
+		} else {
+			continue;
+		}
+
+		if (send_buffer(sock_fd, mapped_base + pos, len) < 0) {
+			if (!interrupted) {
+				fprintf(stderr, "socket write failed, %d\n", errno);
+			}
+			break;
+		}
+
+		pos += len;
+		transferred += len;
+	}
+
+	return transferred;
+}
+
+static u_int64_t transfer_mmapfile(struct scope_parameter *param,
+                                   option_fields_t *options)
+{
+	u_int64_t transferred = 0ULL;
+	u_int64_t size = 1024ULL * options->kbytes_to_transfer;
+	unsigned long pos;
+	size_t len;
+	unsigned long curr;
+	unsigned long *curr_addr;
+	unsigned long base;
+	void *mapped_base;
+	size_t buf_size;
+	FILE *f;
+
+	curr_addr = param->mapped_io + (options->scope_chn ? 0x118 : 0x114);
+	base = *(unsigned long *)(param->mapped_io +
+                                  (options->scope_chn ? 0x10c : 0x104));
+	mapped_base = options->scope_chn ? param->mapped_buf_b
+	                                 : param->mapped_buf_a;
+	buf_size = options->scope_chn ? param->buf_b_size : param->buf_a_size;
+
+	if (!(f = fopen("/tmp/data","wb")))
+		return 0ULL;
+
+	pos = 0;
+	while (!size || transferred < size) {
+		if (pos == buf_size)
+			pos = 0;
+
+		curr = *curr_addr - base;
+
+		if (pos + CHUNK <= curr) {
+			len = CHUNK;
+		} else if (pos > curr) {
+			if (pos + CHUNK <= buf_size) {
+				len = CHUNK;
+			} else {
+				len = buf_size - pos;
+			}
+		} else {
+			continue;
+		}
+
+		len = fwrite(mapped_base + pos, 1, len, f);
+		if (len <= 0)
+			break;
+
+		pos += len;
+		transferred += len;
+	}
+	fclose(f);
+
+	return transferred;
+}
+
 static int send_buffer(int sock_fd, const char *buf, size_t len)
 {
 	int retval = 0;
@@ -215,9 +361,4 @@ static int send_buffer(int sock_fd, const char *buf, size_t len)
 	}
 
 	return retval;
-}
-
-static void int_handler(int sig)
-{
-	interrupted = 1;
 }
