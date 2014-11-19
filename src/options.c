@@ -89,7 +89,7 @@ int handle_options(int argc, char *argv[], option_fields_t *options)
                 options->tcp = 0;
                 break;
             case 'k': //number of kbytes to transfer
-                options->kbytes_to_transfer = atoll(optarg);
+                options->kbytes_to_transfer = atol(optarg);
                 break;
             case 'r': // report-rate
                 options->report_rate = 1;
@@ -117,8 +117,7 @@ int handle_options(int argc, char *argv[], option_fields_t *options)
             case '?':
             case 'h':
             default:
-                usage();
-                break;
+                return 1;
         }
     }
 
@@ -153,16 +152,10 @@ int check_options(option_fields_t *options)
 
 void usage(void)
 {
-	static int shown = 0;
-
-	if (shown)
-		return;
-	shown++;
-
-    printf("Usage:  rp_remote_acquire [-apmukrhcd]\n");
+    printf("Usage:  rp_remote_acquire [-apmukrhcdes]\n");
     printf(
              "  -a  --address ip_address target address in client mode\n"
-             "  -p  --port port_num port number\b"
+             "  -p  --port port_num port number\n"
              "  -m  --mode ((1|client)|(2|server)|(3|file)|(4|on_the_fly_test))\n"
              "  -u  --udp indicates tool should use udp mode\n"
              "  -k  --kbytes_to_transfer num_kbytes number of kilobytes to transfer\n"
