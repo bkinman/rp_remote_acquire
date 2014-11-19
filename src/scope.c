@@ -89,13 +89,61 @@ int scope_init(struct scope_parameter *param, option_fields_t *options)
 		param->decimation <<= 1;
 	param->decimation >>= 1;
 
-	if (param->mapped_io) {
-		// set up scope decimation
-		*(unsigned long *)(param->mapped_io + 0x14) = param->decimation;
-		if (param->decimation)
-			*(unsigned long *)(param->mapped_io + 0x28) = 1;
+	if (!param->mapped_io) {
+		goto out;
 	}
 
+	/* set up scope decimation */
+	*(unsigned long *)(param->mapped_io + 0x14) = param->decimation;
+	if (param->decimation)
+		*(unsigned long *)(param->mapped_io + 0x28) = 1;
+
+	/* set up filters
+	 * SCOPE_a_filt_aa		0x00000030UL
+	 * SCOPE_a_filt_bb		0x00000034UL
+	 * SCOPE_a_filt_kk		0x00000038UL
+	 * SCOPE_a_filt_pp		0x0000003cUL
+	 * SCOPE_b_filt_aa		0x00000040UL
+	 * SCOPE_b_filt_bb		0x00000044UL
+	 * SCOPE_b_filt_kk		0x00000048UL
+	 * SCOPE_b_filt_pp		0x0000004cUL
+	 */
+	/* Equalization filter */
+	if (options->scope_equalizer) {
+		if (options->scope_hv) {
+			/* Low gain = HV */
+			*(unsigned long *)(param->mapped_io + 0x30) = 0x4C5F;
+			*(unsigned long *)(param->mapped_io + 0x34) = 0x2F38B;
+			*(unsigned long *)(param->mapped_io + 0x40) = 0x4C5F;
+			*(unsigned long *)(param->mapped_io + 0x44) = 0x2F38B;
+		} else {
+			/* High gain = LV */
+			*(unsigned long *)(param->mapped_io + 0x30) = 0x7D93;
+			*(unsigned long *)(param->mapped_io + 0x34) = 0x437C7;
+			*(unsigned long *)(param->mapped_io + 0x40) = 0x7D93;
+			*(unsigned long *)(param->mapped_io + 0x44) = 0x437C7;
+		}
+	} else {
+		*(unsigned long *)(param->mapped_io + 0x30) = 0;
+		*(unsigned long *)(param->mapped_io + 0x34) = 0;
+		*(unsigned long *)(param->mapped_io + 0x40) = 0;
+		*(unsigned long *)(param->mapped_io + 0x44) = 0;
+	}
+
+	/* Shaping filter */
+	if (options->scope_shaping) {
+		*(unsigned long *)(param->mapped_io + 0x38) = 0xd9999a;
+		*(unsigned long *)(param->mapped_io + 0x3c) = 0x2666;
+		*(unsigned long *)(param->mapped_io + 0x48) = 0xd9999a;
+		*(unsigned long *)(param->mapped_io + 0x4c) = 0x2666;
+	} else {
+		*(unsigned long *)(param->mapped_io + 0x38) = 0xffffff;
+		*(unsigned long *)(param->mapped_io + 0x3c) = 0;
+		*(unsigned long *)(param->mapped_io + 0x48) = 0xffffff;
+		*(unsigned long *)(param->mapped_io + 0x4c) = 0;
+	}
+
+out:
 	return 0;
 }
 

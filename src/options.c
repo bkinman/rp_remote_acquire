@@ -48,6 +48,9 @@ static struct option g_long_options[] =
     {"help",               no_argument,       NULL, 'h'},
     {"scope-channel",      required_argument, NULL, 'c'},
     {"scope-decimation",   required_argument, NULL, 'd'},
+    {"scope-HV",           no_argument,       NULL, 1  },
+    {"scope-no-equalizer", no_argument,       NULL, 'e'},
+    {"scope-no-shaping",   no_argument,       NULL, 's'},
     {NULL, 0, NULL, 0}
 };
 
@@ -59,7 +62,7 @@ int handle_options(int argc, char *argv[], option_fields_t *options)
     int ch;
     int mode;
 
-    while ((ch = getopt_long(argc, argv, "a:p:m:uk:rhc:d:", g_long_options, NULL)) != -1)
+    while ((ch = getopt_long(argc, argv, "a:p:m:uk:rhc:d:es", g_long_options, NULL)) != -1)
     {
         // check to see if a single character or long option came through
         switch (ch)
@@ -101,6 +104,15 @@ int handle_options(int argc, char *argv[], option_fields_t *options)
                 break;
             case 'd': // Decimation
                 options->scope_dec = atoi(optarg);
+                break;
+            case 1: // enable HV input settings
+                options->scope_hv = 1;
+                break;
+            case 'e': // disable equalization filter
+                options->scope_equalizer = 0;
+                break;
+            case 's': // disable shaping filter
+                options->scope_shaping = 0;
                 break;
             case '?':
             case 'h':
@@ -158,6 +170,9 @@ void usage(void)
              "  -h  --help Display this usage information\n"
              "  -c  --scope-channel channel ((0|A)|(1|B))\n"
              "  -d  --scope-decimation decimation 0,1,2,4,..,65536\n"
+             "  -e  --scope-no-equalizer disable equalization filter\n"
+             "      --scope-HV enable HV equalizer settings\n"
+             "  -s  --scope-no-shaping disable shaping filter\n"
            "\n");
     printf("Examples:\n");
     printf("\t Insert example here\n");

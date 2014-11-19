@@ -65,6 +65,9 @@ static option_fields_t g_options =
 		.report_rate = 0,
 		.scope_chn = 0,
 		.scope_dec = 32,
+		.scope_equalizer = 1,
+		.scope_hv = 0,
+		.scope_shaping = 1,
 };
 
 /******************************************************************************

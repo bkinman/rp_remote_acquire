@@ -47,6 +47,9 @@ struct option_fields_
     int report_rate;
     int scope_chn;
     int scope_dec;
+    int scope_hv;
+    int scope_equalizer;
+    int scope_shaping;
 };
 typedef struct option_fields_ option_fields_t;
 
