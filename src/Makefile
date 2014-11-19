@@ -1,5 +1,5 @@
 
-OBJS = main.o scope.o transfer.o
+OBJS = main.o scope.o transfer.o options.o
 SRCS = $(subst .o,.c, $(OBJS)))
 
 TARGET=rp_remote_acquire
