@@ -62,6 +62,7 @@ static option_fields_t g_options =
 		.tcp = 1,
 		.mode = client,
 		.kbytes_to_transfer = 0,
+		.fname = "/tmp/out",
 		.report_rate = 0,
 		.scope_chn = 0,
 		.scope_dec = 32,
@@ -89,7 +90,8 @@ int main(int argc, char **argv)
 	if (scope_init(&param, &g_options))
 		return -1;
 
-	if (g_options.mode == client || g_options.mode == server)
+	if (g_options.mode == client || g_options.mode == server ||
+	    g_options.mode == c_pipe || g_options.mode == s_pipe)
 		if ((sock_fd = connection_init(&g_options)) < 0) {
 			retval = -1;
 			goto cleanup;
@@ -97,7 +99,8 @@ int main(int argc, char **argv)
 
 	retval = transfer_data(sock_fd, &param, &g_options);
 
-	if (g_options.mode == client || g_options.mode == server)
+	if (g_options.mode == client || g_options.mode == server ||
+	    g_options.mode == c_pipe || g_options.mode == s_pipe)
 		connection_cleanup(sock_fd);
 
 cleanup:

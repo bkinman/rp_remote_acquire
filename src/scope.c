@@ -29,6 +29,7 @@
 
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -41,6 +42,8 @@ int scope_init(struct scope_parameter *param, option_fields_t *options)
 {
 	off_t buf_a_addr, buf_b_addr;
 	int decimation = options->scope_dec;
+
+	memset(param, 0, sizeof(*param));
 
 	param->channel = options->scope_chn;
 	param->scope_fd = open("/dev/rpad_scope0", O_RDWR);

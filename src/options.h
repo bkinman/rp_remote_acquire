@@ -31,10 +31,11 @@
 #define OPTIONS_H_
 
 enum mode_e {
-	server = 0,
-	client,
+	client = 0,
+	server,
 	file,
-	on_the_fly_test,
+	c_pipe,
+	s_pipe,
 };
 
 struct option_fields_
@@ -44,6 +45,7 @@ struct option_fields_
     int tcp;
     enum mode_e mode;
     size_t kbytes_to_transfer;
+    char *fname;
     int report_rate;
     int scope_chn;
     int scope_dec;

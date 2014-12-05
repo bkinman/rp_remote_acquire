@@ -44,6 +44,7 @@ static struct option g_long_options[] =
     {"mode",               required_argument, NULL, 'm'},
     {"udp",                no_argument,       NULL, 'u'},
     {"kbytes_to_transfer", required_argument, NULL, 'k'},
+    {"fname",              required_argument, NULL, 'f'},
     {"report-rate",        no_argument,       NULL, 'r'},
     {"help",               no_argument,       NULL, 'h'},
     {"scope-channel",      required_argument, NULL, 'c'},
@@ -62,7 +63,7 @@ int handle_options(int argc, char *argv[], option_fields_t *options)
     int ch;
     int mode;
 
-    while ((ch = getopt_long(argc, argv, "a:p:m:uk:rhc:d:es", g_long_options, NULL)) != -1)
+    while ((ch = getopt_long(argc, argv, "a:p:m:uk:f:rhc:d:es", g_long_options, NULL)) != -1)
     {
         // check to see if a single character or long option came through
         switch (ch)
@@ -82,14 +83,19 @@ int handle_options(int argc, char *argv[], option_fields_t *options)
                     options->mode = server;
                 else if (!strcmp("file",optarg) || mode == 3)
                     options->mode = file;
-                else if (!strcmp("on_the_fly_test",optarg) || mode == 4)
-                    options->mode = on_the_fly_test;
+                else if (!strcmp("c_pipe",optarg) || mode == 4)
+                    options->mode = c_pipe;
+                else if (!strcmp("s_pipe",optarg) || mode == 5)
+                    options->mode = s_pipe;
                 break;
             case 'u': //udp
                 options->tcp = 0;
                 break;
             case 'k': //number of kbytes to transfer
                 options->kbytes_to_transfer = atol(optarg);
+                break;
+            case 'f': // file name
+                options->fname = optarg;
                 break;
             case 'r': // report-rate
                 options->report_rate = 1;
@@ -126,16 +132,15 @@ int handle_options(int argc, char *argv[], option_fields_t *options)
 
 int check_options(option_fields_t *options)
 {
-    if(options->mode == client || options->mode == server)
-    {
+    if (options->mode == client || options->mode == server ||
+        options->mode == c_pipe || options->mode == s_pipe) {
 	    if (options->port <1) {
 		    fprintf(stderr,"Port number invalid, or not selected (use -p)\n");
 		    return 1;
 	    }
     }
 
-    if(options->mode == client)
-    {
+    if (options->mode == client || options->mode == c_pipe) {
 		if(0 == strncmp(options->address, "", sizeof(options->address)) )
 		{
 			fprintf(stderr,"No ip address provided (use -a)\n");
@@ -152,13 +157,14 @@ int check_options(option_fields_t *options)
 
 void usage(void)
 {
-    printf("Usage:  rp_remote_acquire [-apmukrhcdes]\n");
+    printf("Usage:  rp_remote_acquire [-apmukfrhcdes]\n");
     printf(
              "  -a  --address ip_address target address in client mode\n"
              "  -p  --port port_num port number\n"
-             "  -m  --mode ((1|client)|(2|server)|(3|file)|(4|on_the_fly_test))\n"
+             "  -m  --mode ((1|client)|(2|server)|(3|file)|(4|c_pipe)|(5|s_pipe))\n"
              "  -u  --udp indicates tool should use udp mode\n"
              "  -k  --kbytes_to_transfer num_kbytes number of kilobytes to transfer\n"
+             "  -f  --fname target file name for mode file\n"
              "  -r  --report-rate turn on rate reporting\n"
              "  -h  --help Display this usage information\n"
              "  -c  --scope-channel channel ((0|A)|(1|B))\n"
