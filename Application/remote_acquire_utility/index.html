@@ -1,0 +1,307 @@
+<!--
+ * Red Pitaya Remote acquisition utility.
+ *
+ * Author: Brandon Kinman <info@eskala.eu>
+ *         
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frequency Response Analyzer</title>
+  <link href="../assets/bootstrap-3.0.0/css/bootstrap.css" rel="stylesheet" type="text/css">
+  <link href="../assets/style.css?6" rel="stylesheet" type="text/css">
+  <script src="../assets/bootstrap-3.0.0/js/jquery.js"></script>
+  <script src="../assets/bootstrap-3.0.0/js/bootstrap.min.js"></script>
+  <script type="text/javascript">
+
+  // Settings which can be modified
+  var app_id = 'remote_acquire';
+  var root_url = '';
+  //var root_url = 'http://10.0.1.221';      // Test local
+  //var root_url = 'http://192.168.53.133';  // Test remote and local  
+  //var root_url = 'http://192.168.1.100';   // Default RedPitaya IP
+  var start_app_url = root_url + '/bazaar?start=' + app_id;
+  var stop_app_url = root_url + '/bazaar?stop=';
+  var get_url = root_url + '/data';
+  var post_url = root_url + '/data';
+  
+  var update_interval = 50;          // Update interval for PC, milliseconds
+  var update_interval_mobdev = 500;  // Update interval for mobile devices, milliseconds 
+  var request_timeout = 15000;       // Milliseconds
+  
+  // Settings which should not be modified
+  var downloading = false;
+  var sending = false;
+  var send_que = false;
+  var user_editing = false;
+  var app_started = false;
+  var last_get_failed = false;
+  var autorun = 1;
+  var datasets = [];
+  var params = {
+    original: null,
+    local: null
+  };
+  
+  // Default parameters - posted after server side app is started 
+  var def_params = {
+    //BK: Turned these off
+	  // freq_range:   parseInt(0),
+	  // freq_unit:    parseInt(2),
+	  // en_cal1:      parseInt(0),
+	  // en_cal2:      parseInt(0)
+  };
+  
+  // On page loaded
+  $(function() {
+    
+    // Show different buttons on touch screens
+    if(window.ontouchstart === undefined) {
+      $('.btn-lg').removeClass('btn-lg');
+      $('.modal .btn').addClass('btn-sm');
+      $('#btn_zoompan').remove();
+      $('#btn_zoomin, #btn_zoomout, #btn_pan').show();
+    }
+    else {
+      update_interval = update_interval_mobdev;
+      $('#btn_zoomin, #btn_zoomout, #btn_pan').remove();
+      $('#btn_zoompan').show();
+    }
+    
+    // Add application ID in the message from modal popup
+    $('.app-id').text(app_id);
+    
+    // Disable all controls until the params state is loaded for the first time 
+    $('input, select, button', '.container').prop('disabled', true);
+    
+    // Events binding
+        
+    $('#btn_selection, #btn_zoompan').on('blur', function() {
+      $(this).removeClass('active');
+    });
+    
+    // Modal popups
+    
+    $('#modal_err, #modal_app').modal({ show: false, backdrop: 'static', keyboard: false });
+    
+    $('#btn_switch_app').on('click', function() {
+      var newapp_id = $('#new_app_id').text();
+      if(newapp_id.length) {
+        location.href = location.href.replace(app_id, newapp_id);
+      }
+    });
+    
+    $('.btn-app-restart').on('click', function() {
+      location.reload();
+    });
+    
+    $('#btn_retry_get').on('click', function() {
+      $('#modal_err').modal('hide');
+      updateGraphData();
+    });
+    
+    $('.btn-close-modal').on('click', function() {
+      $(this).closest('.modal').modal('hide');
+    });
+    
+    // Load first data
+    updateGraphData();
+    
+    // Stop the application when page is unloaded
+    window.onbeforeunload = function() { 
+      $.ajax({
+        url: stop_app_url,
+        async: false
+      });
+    };
+    
+  });
+  
+  function startApp() {
+    $.get(
+      start_app_url
+    )
+    .done(function(dresult) {
+      if(dresult.status == 'ERROR') {
+        showModalError((dresult.reason ? dresult.reason : 'Could not start the application.'), true);
+      }
+      else {
+        $.post(
+          post_url, 
+          JSON.stringify({ datasets: { params: def_params } })
+        )
+        .done(function(dresult) {
+          app_started = true;
+          updateGraphData();      
+        })
+        .fail(function() {
+          showModalError('Could not initialize the application with default parameters.', false, true);
+        });
+      }
+    })
+    .fail(function() {
+      showModalError('Could not start the application.', true);
+    });
+  }
+  
+  function showModalError(err_msg, retry_btn, restart_btn, ignore_btn) {
+    var err_modal = $('#modal_err');
+    
+    err_modal.find('#btn_retry_get')[retry_btn ? 'show' : 'hide']();
+    err_modal.find('.btn-app-restart')[restart_btn ? 'show' : 'hide']();
+    err_modal.find('#btn_ignore')[ignore_btn ? 'show' : 'hide']();
+    err_modal.find('.modal-body').html(err_msg);
+    err_modal.modal('show');
+  }    
+  
+  function loadParams(orig_params) {
+    if(! $.isPlainObject(orig_params)) {
+      return;
+    }
+    params.original = $.extend({}, orig_params);
+    
+    // Same data in local and original params
+    params.local = $.extend({}, params.original);
+
+    // For spectrum analyzer autorun is always on
+    autorun = 1;
+    
+    $('#freq_range').val(params.original.freq_range);
+    
+    updateFrequencyUnits(orig_params);
+    $('#ytitle, .waterfall_title').show();
+  }
+  
+  function isParamChanged() {
+    if(params.original) {
+      for(var key in params.original) {
+        if(params.original[key] != params.local[key]) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  
+  function sendParams(refresh_data, force_send) {
+    if(sending || (force_send !== true && !isParamChanged())) {
+      send_que = sending;
+      return;
+    }
+    sending = true;
+    
+	params.local.en_cal1 =  cal_butt1;
+    params.local.en_cal2 =  cal_butt2;
+	
+    $.ajax({
+      type: 'POST',
+      url: post_url,
+      data: JSON.stringify({ datasets: { params: params.local } }),
+      timeout: request_timeout,
+      cache: false
+    })
+    .done(function(dresult) {
+      // OK: Load the params received as POST result
+      if(dresult.datasets !== undefined && dresult.datasets.params !== undefined) {
+        loadParams(dresult.datasets.params);
+        
+        if(refresh_data && !downloading) {
+          updateGraphData();
+        } 
+      }
+      else if(dresult.status == 'ERROR') {
+        showModalError((dresult.reason ? dresult.reason : 'Error while sending data (E1).'), false, true, true);
+        send_que = false;
+      }
+      else {
+        showModalError('Error while sending data (E2).', false, true, true);
+      }
+    })
+    .fail(function() {
+      showModalError('Error while sending data (E3).', false, true, true);
+    })
+    .always(function() {
+      sending = false;
+      user_editing = false;
+      
+      if(send_que) {
+        send_que = false;
+        setTimeout(function(refresh_data) {
+          sendParams(refresh_data);
+        }, 100);
+      }
+    });
+  }
+  
+  function getData(from, to) {
+    var rangedata = new Array();
+    for(var i=0; i<datasets.length; i++) {
+      if(! $('#btn_ch' + (i+1)).data('checked')) {
+        continue;
+      }
+      rangedata.push({ color: datasets[i].color, label: datasets[i].label, data: [] });
+      for(var j=0; j<datasets[i].data.length; j++) {
+        if(datasets[i].data[j][0] > to) {
+          break;
+        }
+        if(datasets[i].data[j][0] >= from) {
+          rangedata[rangedata.length - 1].data.push(datasets[i].data[j]);
+        }
+      }
+    }
+    rangedata = filterData(rangedata, (plot ? plot.width() : $('plot_holder').width()));
+    return rangedata;
+  }
+  </script>
+  <script src="../assets/redpitaya.custom.js"></script>
+</head>
+<body>
+  <div class="header">
+    <div class="container">
+      <a id="btn_exit" class="pull-left" href="/index.html"><span class="glyphicon glyphicon-chevron-left" title="Exit" alt="Exit"></span></a>
+      <img class="logo pull-left" src="../assets/images/logo_white.png">
+      <h2 class="page-title">Remote Data Acquire</h2>
+    </div>
+  </div>
+  <div class="container">
+    <div class="footer clearfix">
+      <p class="pull-right" style="margin: 4px 0 0">&copy; 2014 - Brandon Kinman</p>
+    </div>
+  </div>
+  <div id="modal_err" class="modal" tabindex="-1" role="dialog" aria-labelledby="modal_err_label" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 class="modal-title" id="modal_err_label">Application error</h4>
+        </div>
+        <div class="modal-body"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default btn-close-modal" id="btn_ignore">Ignore</button>
+          <button type="button" class="btn btn-default" id="btn_retry_get">Retry</button>
+          <button type="button" class="btn btn-primary btn-app-restart">Restart</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="modal_app" class="modal" tabindex="-1" role="dialog" aria-labelledby="modal_app_label" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 class="modal-title" id="modal_app_label">Application stopped</h4>
+        </div>
+        <div class="modal-body">
+          The <strong><span class="app-id"></span></strong> application was stopped. The current started application is <strong><span id="new_app_id"></span></strong>.<br />
+          Do you want to switch to newly started application or to restart <strong><span class="app-id"></span></strong>?
+        </div>
+        <div class="modal-footer">
+          <a href="/index.html" class="btn btn-danger pull-left">Exit app</a>
+          <button type="button" class="btn btn-default" id="btn_switch_app">Switch</button>
+          <button type="button" class="btn btn-primary btn-app-restart">Restart</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+    "name": "Remote Acquire Utility",
+    "version": "0.92-BUILD_NUMBER",
+    "revision": "REVISION",
+    "description": "Allows for high-speed channel acquisition over TCP/UDP."
+}

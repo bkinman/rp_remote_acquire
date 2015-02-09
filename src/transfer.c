@@ -27,6 +27,10 @@
  * SOFTWARE.
  */
 
+/* _GNU_SOURCE provides splice() and vmsplice(), which are Linux kernel
+ * specific portions of GNU's libc runtime.
+ */
+#define _GNU_SOURCE
 #include <stddef.h>
 #include <stdio.h>
 #include <sys/socket.h>
