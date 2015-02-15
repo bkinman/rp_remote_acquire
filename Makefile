@@ -4,7 +4,7 @@ cli:
 	make -C ./src
 
 controller:
-	make -C ./Application/remote_acquire_utility/src
+	make -C ./Application/remote_acquire_utility zip
 
 clean:
 	make -C ./Application/remote_acquire_utility/src clean

@@ -97,6 +97,8 @@
         async: false
       });
     };
+
+    startApp();
     
   });
   
@@ -114,8 +116,7 @@
           JSON.stringify({ datasets: { params: def_params } })
         )
         .done(function(dresult) {
-          app_started = true;
-          updateGraphData();      
+          app_started = true;     
         })
         .fail(function() {
           showModalError('Could not initialize the application with default parameters.', false, true);
