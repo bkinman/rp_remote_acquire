@@ -45,13 +45,22 @@
     local: null
   };
   
-  // Default parameters - posted after server side app is started 
+  //Default parameters - posted after server side app is started 
   var def_params = {
-    //BK: Turned these off
-	  // freq_range:   parseInt(0),
-	  // freq_unit:    parseInt(2),
-	  // en_cal1:      parseInt(0),
-	  // en_cal2:      parseInt(0)
+    ip_tup_a: parseInt(192),
+    ip_tup_b: parseInt(168),
+    ip_tup_c: parseInt(1),
+    ip_tup_d: parseInt(100),
+    port: parseInt(7777),
+    mode: parseInt(2),    //2 is Server mode
+    b_use_udp: parseInt(0),
+    bytes_to_transfer: parseInt(0), //0 is "unlimited"
+    b_report_rate: parseInt(0),
+    scope_channel: parseInt(0),
+    scope_decimation: parseInt(100), //100 => 125e6/100 ~ 488kSps
+    b_scope_no_equalizer: parseInt(0),
+    b_scope_hv: parseInt(0),
+    scope_no_shaping: parseInt(0),
   };
   
   // On page loaded
