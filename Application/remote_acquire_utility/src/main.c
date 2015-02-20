@@ -22,7 +22,16 @@ const char *rp_app_desc(void)
 
 int rp_app_init(void)
 {
+	int result;
 	LOG("Loading Remote Acquisition Utility.\n");
+
+	LOG("Loading FPGA image: ");
+	result = system("cat /opt/www/apps/remote_acquire_utility/fpga.bit > /dev/xdevcfg");
+	LOG("%s",(0==result)?"SUCESS\n":"FAIL\n");
+
+	LOG("Loading Kernel Module: ");
+	result = system("insmod /opt/www/apps/remote_acquire_utility/rpad.ko");
+	LOG("%s",(0==result)?"SUCESS\n":"FAIL\n");
 
     return 0;
 }

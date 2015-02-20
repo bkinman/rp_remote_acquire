@@ -6,6 +6,7 @@
 
 APP=$(notdir $(CURDIR:%/=%))
 FPGA=fpga.bit
+KERNEL_MODULE=rpad.ko
 
 # Versioning system
 BUILD_NUMBER ?= 0
@@ -29,7 +30,7 @@ $(CONTROLLER):
 zip: $(CONTROLLER)
 	-$(RM) target -rf
 	mkdir -p target/$(APP)
-	cp -r $(CONTROLLER) $(FPGA) info index.html Makefile target/$(APP)
+	cp -r $(CONTROLLER) $(FPGA) $(KERNEL_MODULE) info index.html Makefile target/$(APP)
 	$(MAKE) -C src clean
 	cp -r src target/$(APP)
 	rm `find target/ -iname .svn` -rf
