@@ -1,125 +1,129 @@
 <!--
  * Red Pitaya Remote acquisition utility.
  *
- * Author: Brandon Kinman <info@eskala.eu>
+ * Author: Brandon Kinman <brandon@kinmantech.org>
  *         
 -->
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Frequency Remote Acquire Utility</title>
-  <link href="../assets/bootstrap-3.0.0/css/bootstrap.css" rel="stylesheet" type="text/css">
-  <link href="../assets/style.css?6" rel="stylesheet" type="text/css">
-  <script src="../assets/bootstrap-3.0.0/js/jquery.js"></script>
-  <script src="../assets/bootstrap-3.0.0/js/bootstrap.min.js"></script>
-  <script type="text/javascript">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>
+            Remote Acquire Utility
+        </title>
+        <link href="../assets/bootstrap-3.0.0/css/bootstrap.css" rel="stylesheet" type="text/css">
+        <link href="../assets/style.css?6" rel="stylesheet" type="text/css">
+        <script src="../assets/bootstrap-3.0.0/js/jquery.js" type="text/javascript">
+</script>
+        <script src="../assets/bootstrap-3.0.0/js/bootstrap.min.js" type="text/javascript">
+</script>
+        <script type="text/javascript">
 
-  // Settings which can be modified
-  var app_id = 'remote_acquire_utility';
-  var root_url = '';
-  //var root_url = 'http://10.0.1.221';      // Test local
-  //var root_url = 'http://192.168.53.133';  // Test remote and local  
-  //var root_url = 'http://192.168.1.100';   // Default RedPitaya IP
-  var start_app_url = root_url + '/bazaar?start=' + app_id;
-  var stop_app_url = root_url + '/bazaar?stop=';
-  var get_url = root_url + '/data';
-  var post_url = root_url + '/data';
-  
-  var update_interval = 50;          // Update interval for PC, milliseconds
-  var update_interval_mobdev = 500;  // Update interval for mobile devices, milliseconds 
-  var request_timeout = 15000;       // Milliseconds
-  
-  // Settings which should not be modified
-  var downloading = false;
-  var sending = false;
-  var send_que = false;
-  var user_editing = false;
-  var app_started = false;
-  var last_get_failed = false;
-  var autorun = 1;
-  var datasets = [];
-  var params = {
-    original: null,
-    local: null
-  };
-  
-  //Default parameters - posted after server side app is started 
-  var def_params = {
-    ip_tup_a: parseInt(192),
-    ip_tup_b: parseInt(168),
-    ip_tup_c: parseInt(1),
-    ip_tup_d: parseInt(100),
-    port: parseInt(7777),
-    mode: parseInt(2),    //2 is Server mode
-    b_use_udp: parseInt(0),
-    bytes_to_transfer: parseInt(0), //0 is "unlimited"
-    b_report_rate: parseInt(0),
-    scope_channel: parseInt(0),
-    scope_decimation: parseInt(100), //100 => 125e6/100 ~ 488kSps
-    b_scope_no_equalizer: parseInt(0),
-    b_scope_hv: parseInt(0),
-    scope_no_shaping: parseInt(0),
-  };
-  
-  // On page loaded
-  // This is shorthand for jQuery.ready(handler)
-  $(function() {
-    
-    // Add application ID in the message from modal popup
-    $('.app-id').text(app_id);
-    
-    // Disable all controls until the params state is loaded for the first time 
-    $('input, select, button', '.container').prop('disabled', true);
-    
-    // Events binding
-    
-    // Modal popups
-    
-    $('#modal_err, #modal_app').modal({ show: false, backdrop: 'static', keyboard: false });
-    
-    $('#btn_switch_app').on('click', function() {
-      var newapp_id = $('#new_app_id').text();
-      if(newapp_id.length) {
+        // Settings which can be modified
+        var app_id = 'remote_acquire_utility';
+        var root_url = '';
+        //var root_url = 'http://10.0.1.221';      // Test local
+        //var root_url = 'http://192.168.53.133';  // Test remote and local  
+        //var root_url = 'http://192.168.1.100';   // Default RedPitaya IP
+        var start_app_url = root_url + '/bazaar?start=' + app_id;
+        var stop_app_url = root_url + '/bazaar?stop=';
+        var get_url = root_url + '/data';
+        var post_url = root_url + '/data';
+
+        var update_interval = 50;          // Update interval for PC, milliseconds
+        var update_interval_mobdev = 500;  // Update interval for mobile devices, milliseconds 
+        var request_timeout = 15000;       // Milliseconds
+
+        // Settings which should not be modified
+        var downloading = false;
+        var sending = false;
+        var send_que = false;
+        var user_editing = false;
+        var app_started = false;
+        var last_get_failed = false;
+        var autorun = 1;
+        var datasets = [];
+        var params = {
+        original: null,
+        local: null
+        };
+
+        //Default parameters - posted after server side app is started 
+        var def_params = {
+        ip_tup_a: parseInt(192),
+        ip_tup_b: parseInt(168),
+        ip_tup_c: parseInt(1),
+        ip_tup_d: parseInt(100),
+        port: parseInt(7777),
+        mode: parseInt(2),    //2 is Server mode
+        b_use_udp: parseInt(0),
+        bytes_to_transfer: parseInt(0), //0 is "unlimited"
+        b_report_rate: parseInt(0),
+        scope_channel: parseInt(0),
+        scope_decimation: parseInt(100), //100 => 125e6/100 ~ 488kSps
+        b_scope_no_equalizer: parseInt(0),
+        b_scope_hv: parseInt(0),
+        scope_no_shaping: parseInt(0),
+        };
+
+        // On page loaded
+        // This is shorthand for jQuery.ready(handler)
+        $(function() {
+
+        // Add application ID in the message from modal popup
+        $('.app-id').text(app_id);
+
+        // Disable all controls until the params state is loaded for the first time 
+        $('input, select, button', '.container').prop('disabled', true);
+
+        // Events binding
+
+        // Modal popups
+
+        $('#modal_err, #modal_app').modal({ show: false, backdrop: 'static', keyboard: false });
+
+        $('#btn_switch_app').on('click', function() {
+        var newapp_id = $('#new_app_id').text();
+        if(newapp_id.length) {
         location.href = location.href.replace(app_id, newapp_id);
-      }
-    });
-    
-    $('.btn-app-restart').on('click', function() {
-      location.reload();
-    });
-    
-    $('#btn_retry_get').on('click', function() {
-      $('#modal_err').modal('hide');
-      updateGraphData();
-    });
-    
-    $('.btn-close-modal').on('click', function() {
-      $(this).closest('.modal').modal('hide');
-    });
-    
-    // Stop the application when page is unloaded
-    window.onbeforeunload = function() { 
-      $.ajax({
+        }
+        });
+
+        $('.btn-app-restart').on('click', function() {
+        location.reload();
+        });
+
+        $('#btn_retry_get').on('click', function() {
+        $('#modal_err').modal('hide');
+        updateGraphData();
+        });
+
+        $('.btn-close-modal').on('click', function() {
+        $(this).closest('.modal').modal('hide');
+        });
+
+        // Stop the application when page is unloaded
+        window.onbeforeunload = function() { 
+        $.ajax({
         url: stop_app_url,
         async: false
-      });
-    };
+        });
+        };
 
-    startApp();
-    
-  });
-  
-  function startApp() {
-    $.get(
-      start_app_url
-    )
-    .done(function(dresult) {
-      if(dresult.status == 'ERROR') {
+        startApp();
+
+        });
+
+        function startApp() {
+        $.get(
+        start_app_url
+        )
+        .done(function(dresult) {
+        if(dresult.status == 'ERROR') {
         showModalError((dresult.reason ? dresult.reason : 'Could not start the application.'), true);
-      }
-      else {
+        }
+        else {
         $.post(
           post_url, 
           JSON.stringify({ datasets: { params: def_params } })
@@ -130,169 +134,302 @@
         .fail(function() {
           showModalError('Could not initialize the application with default parameters.', false, true);
         });
-      }
-    })
-    .fail(function() {
-      showModalError('Could not start the application.', true);
-    });
-  }
-  
-  function showModalError(err_msg, retry_btn, restart_btn, ignore_btn) {
-    var err_modal = $('#modal_err');
-    
-    err_modal.find('#btn_retry_get')[retry_btn ? 'show' : 'hide']();
-    err_modal.find('.btn-app-restart')[restart_btn ? 'show' : 'hide']();
-    err_modal.find('#btn_ignore')[ignore_btn ? 'show' : 'hide']();
-    err_modal.find('.modal-body').html(err_msg);
-    err_modal.modal('show');
-  }    
-  
-  function loadParams(orig_params) {
-    if(! $.isPlainObject(orig_params)) {
-      return;
-    }
-    params.original = $.extend({}, orig_params);
-    
-    // Same data in local and original params
-    params.local = $.extend({}, params.original);
+        }
+        })
+        .fail(function() {
+        showModalError('Could not start the application.', true);
+        });
+        }
 
-    // For spectrum analyzer autorun is always on
-    autorun = 1;
-    
-    $('#freq_range').val(params.original.freq_range);
-    
-    updateFrequencyUnits(orig_params);
-    $('#ytitle, .waterfall_title').show();
-  }
-  
-  function isParamChanged() {
-    if(params.original) {
-      for(var key in params.original) {
+        function showModalError(err_msg, retry_btn, restart_btn, ignore_btn) {
+        var err_modal = $('#modal_err');
+
+        err_modal.find('#btn_retry_get')[retry_btn ? 'show' : 'hide']();
+        err_modal.find('.btn-app-restart')[restart_btn ? 'show' : 'hide']();
+        err_modal.find('#btn_ignore')[ignore_btn ? 'show' : 'hide']();
+        err_modal.find('.modal-body').html(err_msg);
+        err_modal.modal('show');
+        }    
+
+        function loadParams(orig_params) {
+        if(! $.isPlainObject(orig_params)) {
+        return;
+        }
+        params.original = $.extend({}, orig_params);
+
+        // Same data in local and original params
+        params.local = $.extend({}, params.original);
+
+        // For spectrum analyzer autorun is always on
+        autorun = 1;
+
+        $('#freq_range').val(params.original.freq_range);
+
+        updateFrequencyUnits(orig_params);
+        $('#ytitle, .waterfall_title').show();
+        }
+
+        function isParamChanged() {
+        if(params.original) {
+        for(var key in params.original) {
         if(params.original[key] != params.local[key]) {
           return true;
         }
-      }
-    }
-    return false;
-  }
-  
-  function sendParams(refresh_data, force_send) {
-    if(sending || (force_send !== true && !isParamChanged())) {
-      send_que = sending;
-      return;
-    }
-    sending = true;
-    
-	params.local.en_cal1 =  cal_butt1;
-    params.local.en_cal2 =  cal_butt2;
-	
-    $.ajax({
-      type: 'POST',
-      url: post_url,
-      data: JSON.stringify({ datasets: { params: params.local } }),
-      timeout: request_timeout,
-      cache: false
-    })
-    .done(function(dresult) {
-      // OK: Load the params received as POST result
-      if(dresult.datasets !== undefined && dresult.datasets.params !== undefined) {
+        }
+        }
+        return false;
+        }
+
+        function sendParams(refresh_data, force_send) {
+        if(sending || (force_send !== true && !isParamChanged())) {
+        send_que = sending;
+        return;
+        }
+        sending = true;
+
+        params.local.en_cal1 =  cal_butt1;
+        params.local.en_cal2 =  cal_butt2;
+
+        $.ajax({
+        type: 'POST',
+        url: post_url,
+        data: JSON.stringify({ datasets: { params: params.local } }),
+        timeout: request_timeout,
+        cache: false
+        })
+        .done(function(dresult) {
+        // OK: Load the params received as POST result
+        if(dresult.datasets !== undefined && dresult.datasets.params !== undefined) {
         loadParams(dresult.datasets.params);
-        
+
         if(refresh_data && !downloading) {
           updateGraphData();
         } 
-      }
-      else if(dresult.status == 'ERROR') {
+        }
+        else if(dresult.status == 'ERROR') {
         showModalError((dresult.reason ? dresult.reason : 'Error while sending data (E1).'), false, true, true);
         send_que = false;
-      }
-      else {
+        }
+        else {
         showModalError('Error while sending data (E2).', false, true, true);
-      }
-    })
-    .fail(function() {
-      showModalError('Error while sending data (E3).', false, true, true);
-    })
-    .always(function() {
-      sending = false;
-      user_editing = false;
-      
-      if(send_que) {
+        }
+        })
+        .fail(function() {
+        showModalError('Error while sending data (E3).', false, true, true);
+        })
+        .always(function() {
+        sending = false;
+        user_editing = false;
+
+        if(send_que) {
         send_que = false;
         setTimeout(function(refresh_data) {
           sendParams(refresh_data);
         }, 100);
-      }
-    });
-  }
-  
-  function getData(from, to) {
-    var rangedata = new Array();
-    for(var i=0; i<datasets.length; i++) {
-      if(! $('#btn_ch' + (i+1)).data('checked')) {
+        }
+        });
+        }
+
+        function getData(from, to) {
+        var rangedata = new Array();
+        for(var i=0; i<datasets.length; i++) {
+        if(! $('#btn_ch' + (i+1)).data('checked')) {
         continue;
-      }
-      rangedata.push({ color: datasets[i].color, label: datasets[i].label, data: [] });
-      for(var j=0; j<datasets[i].data.length; j++) {
+        }
+        rangedata.push({ color: datasets[i].color, label: datasets[i].label, data: [] });
+        for(var j=0; j<datasets[i].data.length; j++) {
         if(datasets[i].data[j][0] > to) {
           break;
         }
         if(datasets[i].data[j][0] >= from) {
           rangedata[rangedata.length - 1].data.push(datasets[i].data[j]);
         }
-      }
-    }
-    rangedata = filterData(rangedata, (plot ? plot.width() : $('plot_holder').width()));
-    return rangedata;
-  }
-  </script>
-  <script src="../assets/redpitaya.custom.js"></script>
-</head>
-<body>
-  <div class="header">
-    <div class="container">
-      <a id="btn_exit" class="pull-left" href="/index.html"><span class="glyphicon glyphicon-chevron-left" title="Exit" alt="Exit"></span></a>
-      <img class="logo pull-left" src="../assets/images/logo_white.png">
-      <h2 class="page-title">Remote Data Acquire</h2>
-    </div>
-  </div>
-  <div class="container">
-    <div class="footer clearfix">
-      <p class="pull-right" style="margin: 4px 0 0">&copy; 2014 - Brandon Kinman</p>
-    </div>
-  </div>
-  <div id="modal_err" class="modal" tabindex="-1" role="dialog" aria-labelledby="modal_err_label" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h4 class="modal-title" id="modal_err_label">Application error</h4>
+        }
+        }
+        rangedata = filterData(rangedata, (plot ? plot.width() : $('plot_holder').width()));
+        return rangedata;
+        }
+        </script>
+        <script src="../assets/redpitaya.custom.js" type="text/javascript">
+</script>
+    </head>
+    <body>
+        <div class="header">
+            <div class="container">
+                <a id="btn_exit" class="pull-left" href="/index.html"></a> <img class="logo pull-left" src="../assets/images/logo_white.png">
+                <h2 class="page-title">
+                    Remote Acquire Utility
+                </h2>
+            </div>
         </div>
-        <div class="modal-body"></div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-default btn-close-modal" id="btn_ignore">Ignore</button>
-          <button type="button" class="btn btn-default" id="btn_retry_get">Retry</button>
-          <button type="button" class="btn btn-primary btn-app-restart">Restart</button>
+        <div class="container">
+            <div class="row">
+                <div class="col-xs-6 col-sm-4">
+                    Hi!
+                </div>
+                <div class="col-xs-6 col-sm-4">
+                    Sup!
+                </div>
+                <div class="col-xs-6 col-sm-4">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <h3 class="panel-title">
+                                Configuration
+                            </h3>
+                        </div>
+                        <div class="panel-body">
+                            <form class="form-horizontal" role="form" onsubmit="return false;">
+                                <div class="form-group">
+                                    <label for="protocol" class="col-xs-4 control-label">Protocol:</label>
+                                    <div class="col-xs-8">
+                                        <select id="protocol" class="form-control">
+                                            <option value="0">
+                                                TCP
+                                            </option>
+                                            <option value="1">
+                                                UDP
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mode" class="col-xs-4 control-label">Mode:</label>
+                                    <div class="col-xs-8">
+                                        <select id="mode" class="form-control">
+                                            <option value="2">
+                                                Server
+                                            </option>
+                                            <option value="1">
+                                                Client
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="scope_channel" class="col-xs-4 control-label">Scope Channel:</label>
+                                    <div class="col-xs-8">
+                                        <select id="scope_channel" class="form-control">
+                                            <option value="0">
+                                                A
+                                            </option>
+                                            <option value="1">
+                                                B
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="b_scope_no_equalizer" class="col-xs-4 control-label">EQ Filter:</label>
+                                    <div class="col-xs-8">
+                                        <select id="b_scope_no_equalizer" class="form-control">
+                                            <option value="0">
+                                                Enabled
+                                            </option>
+                                            <option value="1">
+                                                Disabled
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="b_scope_hv" class="col-xs-4 control-label">HV EQ Settings:</label>
+                                    <div class="col-xs-8">
+                                        <select id="b_scope_hv" class="form-control">
+                                            <option value="0">
+                                                Disabled
+                                            </option>
+                                            <option value="1">
+                                                Enabled
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="scope_no_shaping" class="col-xs-4 control-label">Shaping Filter:</label>
+                                    <div class="col-xs-8">
+                                        <select id="scope_no_shaping" class="form-control">
+                                            <option value="0">
+                                                Enabled
+                                            </option>
+                                            <option value="1">
+                                                Disabled
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="address" class="col-xs-4 control-label">IP Address:</label>
+                                    <div class="col-xs-8">
+                                        <input type="text" class="form-control" id="address" placeholder="192.168.3.1">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="port" class="col-xs-4 control-label">Port:</label>
+                                    <div class="col-xs-8">
+                                        <input type="text" class="form-control" id="port" placeholder="6669">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bytes_to_transfer" class="col-xs-4 control-label">Bytes to Xfer:</label>
+                                    <div class="col-xs-8">
+                                        <input type="text" class="form-control" id="bytes_to_transfer" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="decimation" class="col-xs-4 control-label">Decimation:</label>
+                                    <div class="col-xs-8">
+                                        <input type="text" class="form-control" id="decimation" placeholder="256">
+                                    </div>
+                                </div>
+                            </form>
+                            <div class="row">
+                                <div class="col-xs-4"></div>
+                                <div class="col-xs-5">
+                                    <button id="btn_set_config" class="btn btn-primary" disabled>Set Config</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="footer clearfix">
+                <p class="pull-right" style="margin: 4px 0 0">
+                    © 2014 - Brandon Kinman
+                </p>
+            </div>
         </div>
-      </div>
-    </div>
-  </div>
-  <div id="modal_app" class="modal" tabindex="-1" role="dialog" aria-labelledby="modal_app_label" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h4 class="modal-title" id="modal_app_label">Application stopped</h4>
+        <div id="modal_err" class="modal" tabindex="-1" role="dialog" aria-labelledby="modal_err_label" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="modal_err_label">
+                            Application error
+                        </h4>
+                    </div>
+                    <div class="modal-body"></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default btn-close-modal" id="btn_ignore">Ignore</button> <button type="button" class="btn btn-default" id="btn_retry_get">Retry</button> <button type="button" class="btn btn-primary btn-app-restart">Restart</button>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="modal-body">
-          The <strong><span class="app-id"></span></strong> application was stopped. The current started application is <strong><span id="new_app_id"></span></strong>.<br />
-          Do you want to switch to newly started application or to restart <strong><span class="app-id"></span></strong>?
+        <div id="modal_app" class="modal" tabindex="-1" role="dialog" aria-labelledby="modal_app_label" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="modal_app_label">
+                            Application stopped
+                        </h4>
+                    </div>
+                    <div class="modal-body">
+                        The application was stopped. The current started application is <strong><span id="new_app_id"></span></strong>.<br>
+                        Do you want to switch to newly started application or to restart ?
+                    </div>
+                    <div class="modal-footer">
+                        <a href="/index.html" class="btn btn-danger pull-left">Exit app</a> <button type="button" class="btn btn-default" id="btn_switch_app">Switch</button> <button type="button" class="btn btn-primary btn-app-restart">Restart</button>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="modal-footer">
-          <a href="/index.html" class="btn btn-danger pull-left">Exit app</a>
-          <button type="button" class="btn btn-default" id="btn_switch_app">Switch</button>
-          <button type="button" class="btn btn-primary btn-app-restart">Restart</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</body>
+    </body>
 </html>
