@@ -30,7 +30,7 @@ $(CONTROLLER):
 zip: $(CONTROLLER)
 	-$(RM) target -rf
 	mkdir -p target/$(APP)
-	cp -r $(CONTROLLER) $(FPGA) $(KERNEL_MODULE) info index.html Makefile target/$(APP)
+	cp -r $(CONTROLLER) $(FPGA) $(KERNEL_MODULE) info assets index.html Makefile target/$(APP)
 	$(MAKE) -C src clean
 	cp -r src target/$(APP)
 	rm `find target/ -iname .svn` -rf
