@@ -97,6 +97,22 @@
             params.b_use_udp = parseInt($('#protocol').val());
         });
 
+        $('#address').on('change', function() {
+            if(ipaddr.isValid($('#address').val())){
+                    $('#address-div').removeClass('has-error');
+                    $("#address").css({"background-color": ""});
+                    params.ip_tup_a = parseInt(ipaddr.parse($('#address').val()).octets[0]);
+                    params.ip_tup_b = parseInt(ipaddr.parse($('#address').val()).octets[1]);
+                    params.ip_tup_c = parseInt(ipaddr.parse($('#address').val()).octets[2]);
+                    params.ip_tup_d = parseInt(ipaddr.parse($('#address').val()).octets[3]);
+            } else {
+                $('#address').val('IP Address Was Invalid!');
+                $("#address").css({"background-color": "#ff99cc"});
+                $('#address-div').addClass('has-error');
+            }
+
+        });
+
         $('#btn_set_config').on('click', function() {
             sendParams();
         });
@@ -385,10 +401,10 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="form-group">
+                            <div class="form-group has-feedback" id="address-div">
                                 <label for="address" class="col-xs-4 control-label">IP Address:</label>
                                 <div class="col-xs-8">
-                                    <input type="text" class="form-control" id="address" placeholder="NA">
+                                    <input type="text" class="form-control" id="address" placeholder="NA" aria-describedby="inputError2Status">
                                 </div>
                             </div>
                             <div class="form-group">
