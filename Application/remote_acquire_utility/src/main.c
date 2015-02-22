@@ -6,9 +6,12 @@
 #include <stdlib.h>
 #include <math.h>
 #include <errno.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 #include "main.h"
 #include "version.h"
+#include "options.h"
 
 /******************************************************************************
  * Defines
@@ -22,7 +25,17 @@
 /******************************************************************************
  * static function prototypes
  ******************************************************************************/
+static rp_app_params_t* param_search_by_name(rp_app_params_t *params,uint16_t params_len, char* name);
+static int app_params_to_options(rp_app_params_t* param_tbl,
+											 int param_tbl_len,
+											 option_fields_t *po_option_fields);
+
 static int update_global_param_tbl(rp_app_params_t *p, int len);
+
+static int display_options(option_fields_t options_fields);
+
+static int start_acquisition(option_fields_t options_fields);
+static int stop_acquisition(void);
 
 /******************************************************************************
  * static variables
@@ -43,8 +56,12 @@ static rp_app_params_t g_rp_param_tbl[] =
 	{"b_scope_no_equalizer", 0,    0, 0, 0, 1 },
 	{"b_scope_hv",           0,    0, 0, 0, 1 },
 	{"scope_no_shaping",     0,    0, 0, 0, 1 },
+	{"is_started",           0,    0, 0, 0, 1 }, //Responsible for starting Acquisition
     { NULL,  		         0.0, -1,-1,0.0,0.0}
 };
+
+static option_fields_t g_options = {{0}};
+static int g_acquisition_started = 0;
 
 /******************************************************************************
  * non-static function definitions
@@ -68,6 +85,17 @@ int rp_app_init(void)
 	result = system("insmod /opt/www/apps/remote_acquire_utility/rpad.ko");
 	LOG("%s",(0==result)?"SUCESS\n":"FAIL\n");
 
+	result = app_params_to_options(g_rp_param_tbl,
+						  sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t),
+						  &g_options);
+
+	display_options(g_options);
+
+	if(0 != result)
+	{
+		LOG("%s: Can't load app params into options structure.\n",__func__);
+	}
+
     return 0;
 }
 
@@ -81,6 +109,8 @@ int rp_app_exit(void)
 int rp_set_params(rp_app_params_t *p, int len)
 {
 	int ret_val;
+	int have_new_options;
+	rp_app_params_t *p_is_started_param;
 
 	LOG("%s was called.\n",__func__);
 	LOG("Received %d params.\n",len);
@@ -92,7 +122,53 @@ int rp_set_params(rp_app_params_t *p, int len)
 		return -1;
 	}
 
+	have_new_options = (ret_val>0)?1:0;
+
 	LOG("%s: %d config params were changed.\n",__func__,ret_val);
+
+	ret_val = app_params_to_options(g_rp_param_tbl,
+								sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t),
+								&g_options);
+	if(ret_val != 0)
+	{
+		LOG("%s: problem converting app parameters to options.\n",__func__);
+	}
+
+	if(have_new_options)
+	{
+		LOG("%s: Displaying new options\n",__func__);
+		display_options(g_options);
+	}
+
+	p_is_started_param = param_search_by_name(g_rp_param_tbl,
+									sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t),
+									"is_started");
+
+	if(NULL != p_is_started_param)
+	{
+		if((1 == p_is_started_param->value) && !g_acquisition_started)
+		{
+			if(0 == start_acquisition(g_options))
+			{
+				g_acquisition_started = true;
+			}
+			else
+			{
+				LOG("%s: Unable to start acquisition.\n",__func__);
+			}
+		}
+		else if(((0 == p_is_started_param->value) && g_acquisition_started))
+		{
+			if(0 == stop_acquisition())
+			{
+				g_acquisition_started = false;
+			}
+			else
+			{
+				LOG("%s: Unable to stop acquisition.\n",__func__);
+			}
+		}
+	}
 
     return 0;
 }
@@ -148,6 +224,162 @@ int rp_get_signals(float ***s, int *sig_num, int *sig_len)
 /******************************************************************************
  * static function definitions
  ******************************************************************************/
+static rp_app_params_t* param_search_by_name(rp_app_params_t *params,uint16_t params_len ,char* name)
+{
+	int i;
+
+	if(NULL == params || NULL == name)
+	{
+		LOG("%s: called with NULL param\n",__func__);
+		return NULL;
+	}
+
+	for(i=0;i<params_len;i++)
+	{
+		if(NULL != params[i].name)
+		{
+			if(0 == strcmp(params[i].name,name))
+			{
+				return &params[i];
+			}
+		}
+	}
+
+	return NULL;
+}
+static int app_params_to_options(rp_app_params_t* param_tbl,
+											 int param_tbl_len,
+											 option_fields_t *po_option_fields)
+{
+	int i;
+	int tup_a = -1;
+	int tup_b = -1;
+	int tup_c = -1;
+	int tup_d = -1;
+
+	if(NULL == param_tbl || NULL == po_option_fields)
+	{
+		LOG("%s: called with NULL parameter.\n",__func__);
+		return -1;
+	}
+
+	//Cruise through each entry
+	//But ignore the last entry, because it's a sentinel.
+	for(i=0;i<param_tbl_len-1;i++)
+	{
+		if(0 == strcmp("ip_tup_a",param_tbl[i].name))
+		{
+			tup_a = (int)param_tbl[i].value;
+			continue;
+		}
+
+		if(0 == strcmp("ip_tup_b",param_tbl[i].name))
+		{
+			tup_b = (int)param_tbl[i].value;
+			continue;
+		}
+
+		if(0 == strcmp("ip_tup_c",param_tbl[i].name))
+		{
+			tup_c = (int)param_tbl[i].value;
+			continue;
+		}
+
+		if(0 == strcmp("ip_tup_d",param_tbl[i].name))
+		{
+			tup_d = (int)param_tbl[i].value;
+			continue;
+		}
+
+		if(0 == strcmp("port",param_tbl[i].name))
+		{
+			po_option_fields->port = (int)param_tbl[i].value;
+			continue;
+		}
+
+		if(0 == strcmp("mode",param_tbl[i].name))
+		{
+			int val = (int)param_tbl[i].value;
+			enum mode_e mode;
+
+			switch(val)
+			{
+				case 0:
+					mode = client;
+					break;
+				case 1:
+					mode = server;
+					break;
+				case 2:
+					mode = file;
+					break;
+				case 3:
+					mode = c_pipe;
+					break;
+				case 4:
+					mode = s_pipe;
+					break;
+				default:
+					LOG("%s: unrecognized mode (%d)\n",__func__,val);
+					return -1;
+			}
+
+			po_option_fields->mode = mode;
+			continue;
+		}
+
+		if(0 == strcmp("b_use_udp",param_tbl[i].name))
+		{
+			po_option_fields->tcp = ((int)param_tbl[i].value)?0:1;
+			continue;
+		}
+
+		if(0 == strcmp("bytes_to_transfer",param_tbl[i].name))
+		{
+			po_option_fields->kbytes_to_transfer = (int)param_tbl[i].value;
+			continue;
+		}
+
+		if(0 == strcmp("scope_channel",param_tbl[i].name))
+		{
+			po_option_fields->scope_chn = (int)param_tbl[i].value;
+			continue;
+		}
+
+		if(0 == strcmp("scope_decimation",param_tbl[i].name))
+		{
+			po_option_fields->scope_dec = (int)param_tbl[i].value;
+			continue;
+		}
+
+		if(0 == strcmp("b_scope_no_equalizer",param_tbl[i].name))
+		{
+			po_option_fields->scope_equalizer = ((int)param_tbl[i].value)?0:1;
+			continue;
+		}
+
+		if(0 == strcmp("b_scope_hv",param_tbl[i].name))
+		{
+			po_option_fields->scope_hv = (int)param_tbl[i].value;
+			continue;
+		}
+
+		if(0 == strcmp("scope_no_shaping",param_tbl[i].name))
+		{
+			po_option_fields->scope_shaping = ((int)param_tbl[i].value)?0:1;
+			continue;
+		}
+	}
+
+	if((tup_a>=0) && (tup_b>=0) && (tup_c>=0) && (tup_d>=0))
+	{
+		snprintf(po_option_fields->address,
+				sizeof(po_option_fields->address),
+				"%d.%d.%d.%d",tup_a,tup_b,tup_c,tup_d);
+	}
+
+	return 0;
+}
 static int update_global_param_tbl(rp_app_params_t *p, int len)
 {
 	int i;
@@ -172,5 +404,38 @@ static int update_global_param_tbl(rp_app_params_t *p, int len)
 		}
 	}
 	return num_updates;
+}
+
+static int display_options(option_fields_t options_fields)
+{
+	LOG("OPTIONS:\n");
+	LOG("\taddress: %s\n",options_fields.address);
+	LOG("\tport: %d\n",options_fields.port);
+	LOG("\ttcp: %d\n",options_fields.tcp);
+	LOG("\tmode: %d\n",(int)options_fields.mode);
+	LOG("\tkbytes_to_transfer: %d\n",(int)options_fields.kbytes_to_transfer);
+	LOG("\tfname: %s\n",options_fields.fname);
+	LOG("\treport_rate: %d\n",options_fields.report_rate);
+	LOG("\tscope_chn: %d\n",options_fields.scope_chn);
+	LOG("\tscope_dec: %d\n",options_fields.scope_dec);
+	LOG("\tscope_hv: %d\n",options_fields.scope_hv);
+	LOG("\tscope_equalizer: %d\n",options_fields.scope_equalizer);
+	LOG("\tscope_shaping: %d\n",options_fields.scope_shaping);
+
+	return 0;
+}
+
+static int start_acquisition(option_fields_t options_fields)
+{
+	LOG("%s: acquisition started!\n",__func__);
+
+	return 0;
+}
+
+static int stop_acquisition(void)
+{
+	LOG("%s: acquisition stopped!\n",__func__);
+
+	return 0;
 }
 

@@ -63,6 +63,7 @@
         b_scope_no_equalizer: parseInt(0),
         b_scope_hv: parseInt(0),
         scope_no_shaping: parseInt(0),
+        is_started: parseInt(0),
     };
 
     // On page loaded
@@ -86,19 +87,19 @@
         // $('#b_scope_hv').val(params.b_scope_hv);
         // $('#scope_no_shaping').val(params.scope_no_shaping);
         $('#port').on('change', function() {
-            params.port = parseInt($('#port').val());
+            params.port = parseInt($(this).val());
         });
 
         $('#mode').on('change', function() {
-            params.mode = parseInt($('#mode').val());
+            params.mode = parseInt($(this).val());
         });
 
         $('#protocol').on('change', function() {
-            params.b_use_udp = parseInt($('#protocol').val());
+            params.b_use_udp = parseInt($(this).val());
         });
 
         $('#address').on('change', function() {
-            if(ipaddr.isValid($('#address').val())){
+            if(ipaddr.isValid($(this).val())){
                     $('#address-div').removeClass('has-error');
                     $("#address").css({"background-color": ""});
                     params.ip_tup_a = parseInt(ipaddr.parse($('#address').val()).octets[0]);
@@ -115,6 +116,26 @@
 
         $('#btn_set_config').on('click', function() {
             sendParams();
+        });
+
+        $('#btn_start_stop').on('click', function() {
+            if($(this).hasClass('btn-success'))
+            {
+                //Start Remote Acquire
+                params.is_started = parseInt(1);
+                sendParams();
+                $(this).removeClass('btn-success');
+                $(this).addClass('btn-danger');
+            }
+            else
+            {
+                //Stop Remote Acquire
+                params.is_started = parseInt(0);
+                sendParams();
+                $(this).removeClass('btn-danger');
+                $(this).addClass('btn-success');
+            }
+
         });
 
         // Modal popups
@@ -426,11 +447,17 @@
                                 </div>
                             </div>
                         </form>
-                        <div class="row">
-                            <div class="col-xs-4"></div>
-                            <div class="col-xs-5">
-                                <button id="btn_set_config" class="btn btn-primary" disabled>Set Config</button>
+                        <div class="row text-center">
+                            <div class="col-xs-3"></div>
+                            <div class="col-xs-3">
+                                <button id="btn_set_config" class="btn btn-success" disabled>Set Config</button>
                             </div>
+                            <div class="col-xs-3">
+                                <button id="btn_start_stop" class="btn btn-success">
+                                    <span class="glyphicon glyphicon-play" aria-hidden="true"></span>
+                                </button>
+                            </div>
+                            <div class="col-xs-3"></div>
                         </div>
                     </div>
                 </div>

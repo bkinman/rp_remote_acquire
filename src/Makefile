@@ -5,7 +5,7 @@ SRCS = $(subst .o,.c, $(OBJS)))
 TARGET=rp_remote_acquire
 
 
-CFLAGS=-g -std=gnu99 -Wall -Werror
+CFLAGS=-g -std=gnu99 -Wall -Werror -fPIC
 CFLAGS += -DVERSION=$(VERSION) -DREVISION=$(REVISION)
 
 LIBS=-lm -lpthread
