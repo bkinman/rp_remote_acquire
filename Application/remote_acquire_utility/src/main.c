@@ -8,10 +8,16 @@
 #include <errno.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <pthread.h>
+#include <signal.h>
 
 #include "main.h"
 #include "version.h"
+
 #include "options.h"
+#include "scope.h"
+#include "transfer.h"
+
 
 /******************************************************************************
  * Defines
@@ -37,6 +43,12 @@ static int display_options(option_fields_t options_fields);
 static int start_acquisition(option_fields_t options_fields);
 static int stop_acquisition(void);
 
+static int acq_worker_init(void);
+static int acq_worker_exit(void);
+static void* acq_worker_thread(void* arg);
+static void acq_worker_cleanup_handler(void* arg);
+
+
 /******************************************************************************
  * static variables
  ******************************************************************************/
@@ -61,7 +73,13 @@ static rp_app_params_t g_rp_param_tbl[] =
 };
 
 static option_fields_t g_options = {{0}};
+
 static int g_acquisition_started = 0;
+
+static struct scope_parameter g_scope_parameters;
+
+/* for the acq worker thread */
+static pthread_t* gp_acq_thread_handle = NULL;
 
 /******************************************************************************
  * non-static function definitions
@@ -304,19 +322,19 @@ static int app_params_to_options(rp_app_params_t* param_tbl,
 
 			switch(val)
 			{
-				case 0:
+				case 1:
 					mode = client;
 					break;
-				case 1:
+				case 2:
 					mode = server;
 					break;
-				case 2:
+				case 3:
 					mode = file;
 					break;
-				case 3:
+				case 4:
 					mode = c_pipe;
 					break;
-				case 4:
+				case 5:
 					mode = s_pipe;
 					break;
 				default:
@@ -427,15 +445,128 @@ static int display_options(option_fields_t options_fields)
 
 static int start_acquisition(option_fields_t options_fields)
 {
-	LOG("%s: acquisition started!\n",__func__);
+	LOG("%s: starting acquisition!\n",__func__);
+
+	if(scope_init(&g_scope_parameters,&g_options))
+	{
+		LOG("%s: problem initializing scope.\n",__func__);
+		return -1;
+	}
+
+	if(acq_worker_init())
+	{
+		LOG("%s: problem initializing worker thread.\n",__func__);
+		return -1;
+	}
 
 	return 0;
 }
 
 static int stop_acquisition(void)
 {
-	LOG("%s: acquisition stopped!\n",__func__);
+	LOG("%s: stopping acquisition!\n",__func__);
+
+	if(acq_worker_exit())
+	{
+		LOG("%s: problem exiting worker thread.\n",__func__);
+		return -1;
+	}
 
 	return 0;
 }
 
+static int acq_worker_init(void)
+{
+	int ret_val;
+
+	if(NULL != gp_acq_thread_handle)
+	{
+		LOG("%s: worker already initialized.\n",__func__);
+		return -1;
+	}
+
+	gp_acq_thread_handle = (pthread_t*)malloc(sizeof(pthread_t));
+	if(NULL == gp_acq_thread_handle)
+	{
+		return -1;
+	}
+
+	ret_val = pthread_create(gp_acq_thread_handle,NULL,
+							 acq_worker_thread,(void*)pthread_self());
+	if(0 != ret_val)
+	{
+		return -1;
+	}
+
+	return 0;
+}
+
+static void* acq_worker_thread(void* arg)
+{
+	struct scope_parameter param;
+	int sock_fd;
+	int ret_val;
+	pthread_t parent_pthread = (pthread_t)arg;
+
+	pthread_cleanup_push(acq_worker_cleanup_handler, &sock_fd);
+
+	if (scope_init(&param, &g_options))
+	{
+		LOG("%s: problem initializing scope.\n",__func__);
+		pthread_cancel(parent_pthread);
+		return NULL;
+	}
+
+	if ((sock_fd = connection_init(&g_options)) < 0)
+	{
+		ret_val = -1;
+		pthread_cancel(parent_pthread);
+		goto cleanup;
+	}
+
+	ret_val = transfer_data(sock_fd, &param, &g_options);
+	if(ret_val)
+	{
+		LOG("%s: problem transferring data.\n",__func__);
+		return NULL;
+	}
+
+	connection_cleanup(sock_fd);
+
+cleanup:
+	scope_cleanup(&param);
+
+	pthread_cleanup_pop(NULL);
+	return NULL;
+}
+
+static int acq_worker_exit(void)
+{
+
+    if(NULL == gp_acq_thread_handle)
+    {
+    	LOG("%s: worker thread handle is NULL",__func__);
+    	return -1;
+    }
+
+    if(pthread_cancel(*gp_acq_thread_handle))
+    {
+    	LOG("%s: problem sending SIGINT to worker thread.\n",__func__);
+    	return -1;
+    }
+
+    if(pthread_join(*gp_acq_thread_handle, NULL))
+    {
+    	LOG("%s: unable to join worker thread.\n",__func__);
+    	return -1;
+    }
+
+    gp_acq_thread_handle = NULL;
+
+	return 0;
+}
+
+static void acq_worker_cleanup_handler(void* arg)
+{
+	connection_cleanup(*(int*)arg);
+}

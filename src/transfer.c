@@ -101,7 +101,7 @@ int connection_init(option_fields_t *options)
 	sock_fd = socket(PF_INET, options->tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
 
 	if (sock_fd < 0) {
-		fprintf(stderr, "create socket failed, %d\n", errno);
+		fprintf(stderr, "create socket failed, %s\n", strerror(errno));
 		goto error;
 	}
 
@@ -115,7 +115,7 @@ int connection_init(option_fields_t *options)
 		rc = connect(sock_fd, (struct sockaddr *)&server, sizeof(server));
 		if (rc < 0)
 		{
-			fprintf(stderr, "connect failed, %d\n", errno);
+			fprintf(stderr, "connect failed, %s\n", strerror(errno));
 			goto error_close;
 		}
 	}
@@ -125,12 +125,12 @@ int connection_init(option_fields_t *options)
 		 server.sin_addr.s_addr = INADDR_ANY;
 	     if (bind(sock_fd, (struct sockaddr *) &server, sizeof(server)) < 0)
 	     {
-	    	 fprintf(stderr, "bind failed, %d\n",errno);
+	    	 fprintf(stderr, "bind failed, %s\n",strerror(errno));
 	         goto error_close;
 	     }
 	     if(listen(sock_fd,5) < 0)
 	     {
-	    	 fprintf(stderr, "listen failed, %d\n",errno);
+	    	 fprintf(stderr, "listen failed, %s\n",strerror(errno));
 	    	 goto error_close;
 	     }
 
@@ -138,7 +138,7 @@ int connection_init(option_fields_t *options)
 	     client_sock_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &clilen);
 	     if(client_sock_fd < 0)
 	     {
-	    	 fprintf(stderr, "accept failed, %d\n",errno);
+	    	 fprintf(stderr, "accept failed, %s\n",strerror(errno));
 	    	 goto error_close;
 	     }
 	}
@@ -146,7 +146,7 @@ int connection_init(option_fields_t *options)
 	if (!sigaction(SIGINT, &sa, &oldsa))
 		sa_set = 1;
 	else
-		fprintf(stderr, "configuring signals failed (non-fatal), %d\n", errno);
+		fprintf(stderr, "configuring signals failed (non-fatal), %s\n", strerror(errno));
 
 	if (options->mode == client || options->mode == c_pipe)
 		return sock_fd;
@@ -233,14 +233,14 @@ static u_int64_t transfer_readwrite(int sock_fd, struct scope_parameter *param,
 		block_length = read(param->scope_fd, buffer, block_length);
 		if (block_length < 0) {
 			if (!interrupted) {
-				fprintf(stderr, "rpad read failed, %d\n", errno);
+				fprintf(stderr, "rpad read failed, %s\n", strerror(errno));
 			}
 			break;
 		}
 
 		if (send_buffer(sock_fd, buffer, block_length) < 0) {
 			if (!interrupted) {
-				fprintf(stderr, "socket write failed, %d\n", errno);
+				fprintf(stderr, "socket write failed, %s\n", strerror(errno));
 			}
 			break;
 		}
@@ -302,7 +302,7 @@ static u_int64_t transfer_mmap(int sock_fd, struct scope_parameter *param,
 
 		if (send_buffer(sock_fd, buf, len) < 0) {
 			if (!interrupted) {
-				fprintf(stderr, "socket write failed, %d\n", errno);
+				fprintf(stderr, "socket write failed, %s\n", strerror(errno));
 			}
 			break;
 		}
@@ -338,7 +338,7 @@ static u_int64_t transfer_mmapfile(struct scope_parameter *param,
 	}
 
 	if (!(f = fopen(options->fname, "wb"))) {
-		fprintf(stderr, "file open failed, %d\n", errno);
+		fprintf(stderr, "file open failed, %s\n", strerror(errno));
 		free(buf);
 		return 0ULL;
 	}
@@ -411,7 +411,7 @@ static u_int64_t transfer_mmappipe(int sock_fd, struct scope_parameter *param,
 	buf_size = options->scope_chn ? param->buf_b_size : param->buf_a_size;
 
 	if (pipe(pipe_fd)) {
-		fprintf(stderr, "create pipe failed, %d\n", errno);
+		fprintf(stderr, "create pipe failed, %s\n", strerror(errno));
 		return 0ULL;
 	}
 
@@ -439,15 +439,15 @@ static u_int64_t transfer_mmappipe(int sock_fd, struct scope_parameter *param,
 		slen = vmsplice(pipe_fd[1], &iov, 1, 0/*SPLICE_F_GIFT*/);
 		if (slen != len) {
 			fprintf(stderr,
-			        "vmsplice failed, %d %d, on %p+%lx %d\n",
-			        slen, errno, mapped_base, pos, len);
+			        "vmsplice failed, %d %s, on %p+%lx %d\n",
+			        slen, strerror(errno), mapped_base, pos, len);
 			break;
 		}
 
 		slen = splice(pipe_fd[0], NULL, sock_fd, NULL, len,
 		              SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (slen != len) {
-			fprintf(stderr, "splice failed, %d %d\n", slen, errno);
+			fprintf(stderr, "splice failed, %d %s\n", slen, strerror(errno));
 			break;
 		}
 
