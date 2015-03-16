@@ -34,24 +34,22 @@ enum mode_e {
 	client = 0,
 	server,
 	file,
-	c_pipe,
-	s_pipe,
 };
 
 struct option_fields_
 {
-    char address[16];
-    int port;
-    int tcp;
-    enum mode_e mode;
-    size_t kbytes_to_transfer;
-    char *fname;
-    int report_rate;
-    int scope_chn;
-    int scope_dec;
-    int scope_hv;
-    int scope_equalizer;
-    int scope_shaping;
+	char address[16];
+	int port;
+	int tcp;
+	enum mode_e mode;
+	size_t kbytes_to_transfer;
+	char *fname;
+	int report_rate;
+	int scope_chn;
+	int scope_dec;
+	int scope_hv;
+	int scope_equalizer;
+	int scope_shaping;
 };
 typedef struct option_fields_ option_fields_t;
 

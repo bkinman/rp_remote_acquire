@@ -30,7 +30,6 @@
 /* _GNU_SOURCE provides splice() and vmsplice(), which are Linux kernel
  * specific portions of GNU's libc runtime.
  */
-#define _GNU_SOURCE
 #include <stddef.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -69,8 +68,6 @@ static u_int64_t transfer_mmap(int sock_fd, struct scope_parameter *param,
                                option_fields_t *options);
 static u_int64_t transfer_mmapfile(struct scope_parameter *param,
                                    option_fields_t *options);
-static u_int64_t transfer_mmappipe(int sock_fd, struct scope_parameter *param,
-                                   option_fields_t *options);
 static int send_buffer(int sock_fd, const char *buf, size_t len);
 
 /******************************************************************************
@@ -95,8 +92,7 @@ int connection_init(option_fields_t *options)
 	int rc;
 
 	printf("Creating %s %s\n", options->tcp ? "TCP" : "UDP",
-	       (options->mode == client || options->mode == c_pipe) ? "CLIENT"
-	                                                            : "SERVER");
+	       (options->mode == client) ? "CLIENT" : "SERVER");
 
 	sock_fd = socket(PF_INET, options->tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
 
@@ -109,7 +105,7 @@ int connection_init(option_fields_t *options)
 	server.sin_addr.s_addr = inet_addr(options->address);
 	server.sin_port = htons(options->port);
 
-	if (options->mode == client || options->mode == c_pipe) {
+	if (options->mode == client) {
 		printf("connecting to %s:%i\n", options->address, options->port);
 
 		rc = connect(sock_fd, (struct sockaddr *)&server, sizeof(server));
@@ -121,26 +117,26 @@ int connection_init(option_fields_t *options)
 	}
 	else
 	{
-		 socklen_t clilen;
-		 server.sin_addr.s_addr = INADDR_ANY;
-	     if (bind(sock_fd, (struct sockaddr *) &server, sizeof(server)) < 0)
-	     {
-	    	 fprintf(stderr, "bind failed, %s\n",strerror(errno));
-	         goto error_close;
-	     }
-	     if(listen(sock_fd,5) < 0)
-	     {
-	    	 fprintf(stderr, "listen failed, %s\n",strerror(errno));
-	    	 goto error_close;
-	     }
+		socklen_t clilen;
+		server.sin_addr.s_addr = INADDR_ANY;
+		if (bind(sock_fd, (struct sockaddr *) &server, sizeof(server)) < 0)
+		{
+			fprintf(stderr, "bind failed, %s\n",strerror(errno));
+			goto error_close;
+		}
+		if(listen(sock_fd,5) < 0)
+		{
+			fprintf(stderr, "listen failed, %s\n",strerror(errno));
+			goto error_close;
+		}
 
-	     clilen = sizeof(cli_addr);
-	     client_sock_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &clilen);
-	     if(client_sock_fd < 0)
-	     {
-	    	 fprintf(stderr, "accept failed, %s\n",strerror(errno));
-	    	 goto error_close;
-	     }
+		clilen = sizeof(cli_addr);
+		client_sock_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &clilen);
+		if(client_sock_fd < 0)
+		{
+			fprintf(stderr, "accept failed, %s\n",strerror(errno));
+			goto error_close;
+		}
 	}
 
 	if (!sigaction(SIGINT, &sa, &oldsa))
@@ -148,28 +144,38 @@ int connection_init(option_fields_t *options)
 	else
 		fprintf(stderr, "configuring signals failed (non-fatal), %s\n", strerror(errno));
 
-	if (options->mode == client || options->mode == c_pipe)
+	if (options->mode == client)
 		return sock_fd;
 	else
 		return client_sock_fd;
 
 error_close:
-	if (sock_fd >= 0)
+	if (sock_fd >= 0) {
 		close(sock_fd);
-	if (client_sock_fd >= 0)
+		sock_fd = -1;
+	}
+	if (client_sock_fd >= 0) {
 		close(client_sock_fd);
+		client_sock_fd = -1;
+	}
 error:
 	return -1;
 }
 
 void connection_cleanup(int sock_fd)
 {
-	if (sa_set)
+	if (sa_set) {
 		sigaction(SIGINT, &oldsa, NULL);
-	if (sock_fd >= 0)
+		sa_set = 0;
+	}
+	if (sock_fd >= 0) {
 		close(sock_fd);
-	if (client_sock_fd >= 0)
+		sock_fd = -1;
+	}
+	if (client_sock_fd >= 0) {
 		close(client_sock_fd);
+		client_sock_fd = -1;
+	}
 }
 
 int transfer_data(int sock_fd, struct scope_parameter *param,
@@ -185,21 +191,21 @@ int transfer_data(int sock_fd, struct scope_parameter *param,
 		report_rate = 0;
 
 	if (options->mode == client || options->mode == server) {
-		if (0)
+		if (0) // TODO depending on mmap success
 			transferred = transfer_readwrite(sock_fd, param, options);
 		else
 			transferred = transfer_mmap(sock_fd, param, options);
 	} else if (options->mode == file) {
-		transferred = transfer_mmapfile(param, options);
-	} else if (options->mode == c_pipe || options->mode == s_pipe) {
-		if (0)
-			transferred = transfer_mmappipe(sock_fd, param, options);
+		if (0) // TODO depending on mmap success
+			/*transferred = transfer_readwritefile(sock_fd, param, options)*/;
+		else
+			transferred = transfer_mmapfile(param, options);
 	}
 
 	if (report_rate && !gettimeofday(&end_time, NULL)) {
 		duration = 1000UL * (end_time.tv_sec - start_time.tv_sec)
-			 + (unsigned long)end_time.tv_usec   / 1000UL
-			 - (unsigned long)start_time.tv_usec / 1000UL;
+		         + (unsigned long)end_time.tv_usec   / 1000UL
+		         - (unsigned long)start_time.tv_usec / 1000UL;
 		printf("transferred %lluB in %lums (rate %.2fMB/s)\n",
 		       transferred, duration,
 		       (double)(1000ULL * transferred) / (1024ULL * 1024ULL * duration));
@@ -231,17 +237,15 @@ static u_int64_t transfer_readwrite(int sock_fd, struct scope_parameter *param,
 			block_length = min(sizeof(buffer), size - transferred);
 
 		block_length = read(param->scope_fd, buffer, block_length);
-		if (block_length < 0) {
-			if (!interrupted) {
+		if (block_length < 0 || interrupted) {
+			if (!interrupted)
 				fprintf(stderr, "rpad read failed, %s\n", strerror(errno));
-			}
 			break;
 		}
 
 		if (send_buffer(sock_fd, buffer, block_length) < 0) {
-			if (!interrupted) {
+			if (!interrupted)
 				fprintf(stderr, "socket write failed, %s\n", strerror(errno));
-			}
 			break;
 		}
 
@@ -273,7 +277,7 @@ static u_int64_t transfer_mmap(int sock_fd, struct scope_parameter *param,
 
 	curr_addr = param->mapped_io + (options->scope_chn ? 0x118 : 0x114);
 	base = *(unsigned long *)(param->mapped_io +
-                                  (options->scope_chn ? 0x10c : 0x104));
+	                          (options->scope_chn ? 0x10c : 0x104));
 	mapped_base = options->scope_chn ? param->mapped_buf_b
 	                                 : param->mapped_buf_a;
 	buf_size = options->scope_chn ? param->buf_b_size : param->buf_a_size;
@@ -301,9 +305,8 @@ static u_int64_t transfer_mmap(int sock_fd, struct scope_parameter *param,
 		memcpy(buf, mapped_base + pos, len);
 
 		if (send_buffer(sock_fd, buf, len) < 0) {
-			if (!interrupted) {
+			if (!interrupted)
 				fprintf(stderr, "socket write failed, %s\n", strerror(errno));
-			}
 			break;
 		}
 
@@ -345,7 +348,7 @@ static u_int64_t transfer_mmapfile(struct scope_parameter *param,
 
 	curr_addr = param->mapped_io + (options->scope_chn ? 0x118 : 0x114);
 	base = *(unsigned long *)(param->mapped_io +
-                                  (options->scope_chn ? 0x10c : 0x104));
+	                          (options->scope_chn ? 0x10c : 0x104));
 	mapped_base = options->scope_chn ? param->mapped_buf_b
 	                                 : param->mapped_buf_a;
 	buf_size = options->scope_chn ? param->buf_b_size : param->buf_a_size;
@@ -373,8 +376,11 @@ static u_int64_t transfer_mmapfile(struct scope_parameter *param,
 		memcpy(buf, mapped_base + pos, len);
 
 		len = fwrite(buf, 1, len, f);
-		if (len <= 0)
+		if (len <= 0 || interrupted) {
+			if (!interrupted)
+				fprintf(stderr, "file write failed, %s\n", strerror(errno));
 			break;
+		}
 
 		pos += len;
 		transferred += len;
@@ -382,81 +388,6 @@ static u_int64_t transfer_mmapfile(struct scope_parameter *param,
 
 	fclose(f);
 	free(buf);
-
-	return transferred;
-}
-
-static u_int64_t transfer_mmappipe(int sock_fd, struct scope_parameter *param,
-                                   option_fields_t *options)
-{
-	const int CHUNK = 16 * 4096;
-	u_int64_t transferred = 0ULL;
-	u_int64_t size = 1024ULL * options->kbytes_to_transfer;
-	unsigned long pos;
-	size_t len;
-	ssize_t slen;
-	unsigned long curr;
-	unsigned long *curr_addr;
-	unsigned long base;
-	void *mapped_base;
-	size_t buf_size;
-	int pipe_fd[2];
-	struct iovec iov;
-
-	curr_addr = param->mapped_io + (options->scope_chn ? 0x118 : 0x114);
-	base = *(unsigned long *)(param->mapped_io +
-                                  (options->scope_chn ? 0x10c : 0x104));
-	mapped_base = options->scope_chn ? param->mapped_buf_b
-	                                 : param->mapped_buf_a;
-	buf_size = options->scope_chn ? param->buf_b_size : param->buf_a_size;
-
-	if (pipe(pipe_fd)) {
-		fprintf(stderr, "create pipe failed, %s\n", strerror(errno));
-		return 0ULL;
-	}
-
-	pos = 0UL;
-	while (!size || transferred < size) {
-		if (pos == buf_size)
-			pos = 0UL;
-
-		curr = *curr_addr - base;
-
-		if (pos + CHUNK <= curr) {
-			len = CHUNK;
-		} else if (pos > curr) {
-			if (pos + CHUNK <= buf_size) {
-				len = CHUNK;
-			} else {
-				len = buf_size - pos;
-			}
-		} else {
-			continue;
-		}
-
-		iov.iov_base = mapped_base + pos;
-		iov.iov_len = len;
-		slen = vmsplice(pipe_fd[1], &iov, 1, 0/*SPLICE_F_GIFT*/);
-		if (slen != len) {
-			fprintf(stderr,
-			        "vmsplice failed, %d %s, on %p+%lx %d\n",
-			        slen, strerror(errno), mapped_base, pos, len);
-			break;
-		}
-
-		slen = splice(pipe_fd[0], NULL, sock_fd, NULL, len,
-		              SPLICE_F_MOVE | SPLICE_F_MORE);
-		if (slen != len) {
-			fprintf(stderr, "splice failed, %d %s\n", slen, strerror(errno));
-			break;
-		}
-
-		pos += len;
-		transferred += len;
-	}
-
-	close(pipe_fd[0]);
-	close(pipe_fd[1]);
 
 	return transferred;
 }

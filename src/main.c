@@ -56,19 +56,19 @@
  ******************************************************************************/
 static option_fields_t g_options =
 {
-		/* Setting defaults */
-		.address = "",
-		.port = 14000,
-		.tcp = 1,
-		.mode = client,
-		.kbytes_to_transfer = 0,
-		.fname = "/tmp/out",
-		.report_rate = 0,
-		.scope_chn = 0,
-		.scope_dec = 32,
-		.scope_equalizer = 1,
-		.scope_hv = 0,
-		.scope_shaping = 1,
+	/* Setting defaults */
+	.address = "",
+	.port = 14000,
+	.tcp = 1,
+	.mode = client,
+	.kbytes_to_transfer = 0,
+	.fname = "/tmp/out",
+	.report_rate = 0,
+	.scope_chn = 0,
+	.scope_dec = 32,
+	.scope_equalizer = 1,
+	.scope_hv = 0,
+	.scope_shaping = 1,
 };
 
 /******************************************************************************
@@ -80,18 +80,17 @@ int main(int argc, char **argv)
 	int sock_fd = -1;
 	struct scope_parameter param;
 
-    if(0 != handle_options(argc,argv, &g_options))
-    {
-        usage();
-        exit(1);
-    }
+	if(0 != handle_options(argc,argv, &g_options))
+	{
+		usage();
+		exit(1);
+	}
 
 
 	if (scope_init(&param, &g_options))
 		return -1;
 
-	if (g_options.mode == client || g_options.mode == server ||
-	    g_options.mode == c_pipe || g_options.mode == s_pipe)
+	if (g_options.mode == client || g_options.mode == server)
 		if ((sock_fd = connection_init(&g_options)) < 0) {
 			retval = -1;
 			goto cleanup;
@@ -99,8 +98,7 @@ int main(int argc, char **argv)
 
 	retval = transfer_data(sock_fd, &param, &g_options);
 
-	if (g_options.mode == client || g_options.mode == server ||
-	    g_options.mode == c_pipe || g_options.mode == s_pipe)
+	if (g_options.mode == client || g_options.mode == server)
 		connection_cleanup(sock_fd);
 
 cleanup:

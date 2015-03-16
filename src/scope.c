@@ -65,12 +65,12 @@ int scope_init(struct scope_parameter *param, option_fields_t *options)
 		buf_a_addr = 0x00000000;
 		param->buf_a_size = 0x00200000;
 		param->mapped_buf_a = mmap(NULL, param->buf_a_size, PROT_READ,
-					   MAP_SHARED, param->scope_fd,
-					   buf_a_addr);
+		                           MAP_SHARED, param->scope_fd,
+		                           buf_a_addr);
 		if (param->mapped_buf_a == MAP_FAILED) {
 			fprintf(stderr,
 			        "mmap scope ddr a failed (non-fatal), %d\n",
-				errno);
+			        errno);
 			param->mapped_buf_a = NULL;
 		}
 	} else {
@@ -78,12 +78,12 @@ int scope_init(struct scope_parameter *param, option_fields_t *options)
 		buf_b_addr = 0x00200000;
 		param->buf_b_size = 0x00200000;
 		param->mapped_buf_b = mmap(NULL, param->buf_b_size, PROT_READ,
-					   MAP_SHARED, param->scope_fd,
-					   buf_b_addr);
+		                           MAP_SHARED, param->scope_fd,
+		                           buf_b_addr);
 		if (param->mapped_buf_b == MAP_FAILED) {
 			fprintf(stderr,
 			        "mmap scope ddr b failed (non-fatal), %d\n",
-				errno);
+			        errno);
 			param->mapped_buf_b = NULL;
 		}
 	}

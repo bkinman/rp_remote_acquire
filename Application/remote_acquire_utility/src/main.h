@@ -23,14 +23,14 @@
  * NOTE: During set_params() only value can be changed, other parameters are
  *       read-only and can not be changed from the client.
  * TODO: Make the header accessible to the both - application & webserver
- **/
+ */
 typedef struct rp_app_params_s {
-    char  *name;
-    float  value;
-    int    fpga_update;
-    int    read_only;
-    float  min_val;
-    float  max_val;
+	char  *name;
+	float  value;
+	int    fpga_update;
+	int    read_only;
+	float  min_val;
+	float  max_val;
 } rp_app_params_t;
 
 /* module entry points */

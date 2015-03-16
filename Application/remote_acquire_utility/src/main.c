@@ -33,8 +33,8 @@
  ******************************************************************************/
 static rp_app_params_t* param_search_by_name(rp_app_params_t *params,uint16_t params_len, char* name);
 static int app_params_to_options(rp_app_params_t* param_tbl,
-											 int param_tbl_len,
-											 option_fields_t *po_option_fields);
+                                 int param_tbl_len,
+                                 option_fields_t *po_option_fields);
 
 static int update_global_param_tbl(rp_app_params_t *p, int len);
 
@@ -46,7 +46,6 @@ static int stop_acquisition(void);
 static int acq_worker_init(void);
 static int acq_worker_exit(void);
 static void* acq_worker_thread(void* arg);
-static void acq_worker_cleanup_handler(void* arg);
 
 
 /******************************************************************************
@@ -54,22 +53,22 @@ static void acq_worker_cleanup_handler(void* arg);
  ******************************************************************************/
 static rp_app_params_t g_rp_param_tbl[] =
 {
-	{"ip_tup_a",    		 192 , 0, 0, 0, 255 },
-	{"ip_tup_b",    		 168 , 0, 0, 0, 255 },
-	{"ip_tup_c",    		 3   , 0, 0, 0, 255 },
-	{"ip_tup_d",    		 2   , 0, 0, 0, 255 },
-	{"port"	   ,    		 6669, 0, 0, 0, 0 },
-	{"mode"	   ,    		 2   , 0, 0, 0, 5 }, //Default Mode: Server
-	{"b_use_udp",   		 0   , 0, 0, 0, 1 },
-	{"bytes_to_transfer", 	 0   , 0, 0, 0, 0 },
-	{"b_report_rate", 		 0   , 0, 0, 0, 1 },
-	{"scope_channel",        0   , 0, 0, 0, 0 },
-	{"scope_decimation",     1024, 0, 0, 0, 0 }, //Default Frequency: 122kSps
+	{"ip_tup_a",             192 , 0, 0, 0, 255 },
+	{"ip_tup_b",             168 , 0, 0, 0, 255 },
+	{"ip_tup_c",             3   , 0, 0, 0, 255 },
+	{"ip_tup_d",             2   , 0, 0, 0, 255 },
+	{"port"    ,             6669, 0, 0, 0, 0 },
+	{"mode"    ,             2   , 0, 0, 1, 3 }, //Default Mode: Server
+	{"b_use_udp",            0   , 0, 0, 0, 1 },
+	{"bytes_to_transfer",    0   , 0, 0, 0, 0 },
+	{"b_report_rate",        0   , 0, 0, 0, 1 },
+	{"scope_channel",        0   , 0, 0, 0, 1 },
+	{"scope_decimation",     1024, 0, 0, 0, 65536 }, //Default Frequency: 122kSps
 	{"b_scope_no_equalizer", 0,    0, 0, 0, 1 },
 	{"b_scope_hv",           0,    0, 0, 0, 1 },
 	{"scope_no_shaping",     0,    0, 0, 0, 1 },
 	{"is_started",           0,    0, 0, 0, 1 }, //Responsible for starting Acquisition
-    { NULL,  		         0.0, -1,-1,0.0,0.0}
+	{ NULL,                  0.0, -1,-1,0.0,0.0}
 };
 
 static option_fields_t g_options = {{0}};
@@ -87,7 +86,7 @@ static pthread_t* gp_acq_thread_handle = NULL;
 const char *rp_app_desc(void)
 {
 	LOG("%s: hit\n",__func__);
-    return (const char *)"Red Pitaya Remote Acquisition Utility.\n";
+	return (const char *)"Red Pitaya Remote Acquisition Utility.\n";
 }
 
 int rp_app_init(void)
@@ -95,17 +94,20 @@ int rp_app_init(void)
 	int result;
 	LOG("Loading Remote Acquisition Utility.\n");
 
+	/*LOG("Saving current FPGA image: ");
+	result = system("cat /dev/xdevcfg >/tmp/orig_fpga.bin");
+	LOG(!result ? "SUCCESS\n" : "FAIL\n");*/
 	LOG("Loading FPGA image: ");
-	result = system("cat /opt/www/apps/remote_acquire_utility/fpga.bit > /dev/xdevcfg");
-	LOG("%s",(0==result)?"SUCESS\n":"FAIL\n");
+	result = system("cat /opt/www/apps/remote_acquire_utility/ddrdump.bin >/dev/xdevcfg");
+	LOG((0==result)?"SUCCESS\n":"FAIL\n");
 
 	LOG("Loading Kernel Module: ");
 	result = system("insmod /opt/www/apps/remote_acquire_utility/rpad.ko");
-	LOG("%s",(0==result)?"SUCESS\n":"FAIL\n");
+	LOG((0==result)?"SUCCESS\n":"FAIL\n");
 
 	result = app_params_to_options(g_rp_param_tbl,
-						  sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t),
-						  &g_options);
+	                               sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t),
+	                               &g_options);
 
 	display_options(g_options);
 
@@ -114,14 +116,29 @@ int rp_app_init(void)
 		LOG("%s: Can't load app params into options structure.\n",__func__);
 	}
 
-    return 0;
+	return 0;
 }
 
 int rp_app_exit(void)
 {
+	int result;
+
 	LOG("Unloading Remote Acquisition Utility.\n");
 
-    return 0;
+	if (g_acquisition_started) {
+		result = stop_acquisition();
+		g_acquisition_started = false;
+	}
+
+	LOG("Unloading kernel module: ");
+	result = system("rmmod rpad.ko");
+	LOG(!result ? "SUCCESS\n" : "FAIL\n");
+
+	/*LOG("Restoring FPGA image: ");
+	result = system("cat /tmp/orig_fpga.bin >/dev/xdevcfg");
+	LOG(!result ? "SUCCESS\n" : "FAIL\n");*/
+
+	return 0;
 }
 
 int rp_set_params(rp_app_params_t *p, int len)
@@ -145,8 +162,8 @@ int rp_set_params(rp_app_params_t *p, int len)
 	LOG("%s: %d config params were changed.\n",__func__,ret_val);
 
 	ret_val = app_params_to_options(g_rp_param_tbl,
-								sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t),
-								&g_options);
+	                                sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t),
+	                                &g_options);
 	if(ret_val != 0)
 	{
 		LOG("%s: problem converting app parameters to options.\n",__func__);
@@ -159,8 +176,8 @@ int rp_set_params(rp_app_params_t *p, int len)
 	}
 
 	p_is_started_param = param_search_by_name(g_rp_param_tbl,
-									sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t),
-									"is_started");
+	                                          sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t),
+	                                          "is_started");
 
 	if(NULL != p_is_started_param)
 	{
@@ -188,7 +205,7 @@ int rp_set_params(rp_app_params_t *p, int len)
 		}
 	}
 
-    return 0;
+	return 0;
 }
 
 /* Returned vector must be free'd externally! */
@@ -196,32 +213,32 @@ int rp_get_params(rp_app_params_t **p)
 {
 	LOG("%s was called.\n",__func__);
 
-    rp_app_params_t *p_copy = NULL;
-    int i;
-    int num_config_params = sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t);
+	rp_app_params_t *p_copy = NULL;
+	int i;
+	int num_config_params = sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t);
 
-    p_copy = (rp_app_params_t *)malloc(sizeof(g_rp_param_tbl));
-    if(p_copy == NULL)
-    {
-        return -1;
-    }
-    memcpy(p_copy,g_rp_param_tbl,sizeof(g_rp_param_tbl));
+	p_copy = (rp_app_params_t *)malloc(sizeof(g_rp_param_tbl));
+	if(p_copy == NULL)
+	{
+		return -1;
+	}
+	memcpy(p_copy,g_rp_param_tbl,sizeof(g_rp_param_tbl));
 
-    //We can copy all of the values, but
-    //we will have problems with the name,
-    //on account of the fact that the data cmd
-    //module will try to free, so we must allocate
-    //new strings.
-    for(i = 0; i < (num_config_params -1); i++)
-    {
-        p_copy[i].name = strdup(g_rp_param_tbl[i].name);
-    }
+	//We can copy all of the values, but
+	//we will have problems with the name,
+	//on account of the fact that the data cmd
+	//module will try to free, so we must allocate
+	//new strings.
+	for(i = 0; i < (num_config_params -1); i++)
+	{
+		p_copy[i].name = strdup(g_rp_param_tbl[i].name);
+	}
 
-    p_copy[num_config_params].name = NULL;
+	p_copy[num_config_params].name = NULL;
 
-    *p = p_copy;
+	*p = p_copy;
 
-    return num_config_params-1;
+	return num_config_params-1;
 }
 
 int rp_get_signals(float ***s, int *sig_num, int *sig_len)
@@ -236,7 +253,7 @@ int rp_get_signals(float ***s, int *sig_num, int *sig_len)
 	*sig_num = 0;
 	*sig_len = 0;
 
-    return 0;
+	return 0;
 }
 
 /******************************************************************************
@@ -265,9 +282,10 @@ static rp_app_params_t* param_search_by_name(rp_app_params_t *params,uint16_t pa
 
 	return NULL;
 }
+
 static int app_params_to_options(rp_app_params_t* param_tbl,
-											 int param_tbl_len,
-											 option_fields_t *po_option_fields)
+                                 int param_tbl_len,
+                                 option_fields_t *po_option_fields)
 {
 	int i;
 	int tup_a = -1;
@@ -331,12 +349,6 @@ static int app_params_to_options(rp_app_params_t* param_tbl,
 				case 3:
 					mode = file;
 					break;
-				case 4:
-					mode = c_pipe;
-					break;
-				case 5:
-					mode = s_pipe;
-					break;
 				default:
 					LOG("%s: unrecognized mode (%d)\n",__func__,val);
 					return -1;
@@ -392,18 +404,19 @@ static int app_params_to_options(rp_app_params_t* param_tbl,
 	if((tup_a>=0) && (tup_b>=0) && (tup_c>=0) && (tup_d>=0))
 	{
 		snprintf(po_option_fields->address,
-				sizeof(po_option_fields->address),
-				"%d.%d.%d.%d",tup_a,tup_b,tup_c,tup_d);
+		         sizeof(po_option_fields->address),
+		         "%d.%d.%d.%d",tup_a,tup_b,tup_c,tup_d);
 	}
 
 	return 0;
 }
+
 static int update_global_param_tbl(rp_app_params_t *p, int len)
 {
 	int i;
 	int j;
-    int num_global_cfg_params = sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t);
-    int num_updates = 0;
+	int num_global_cfg_params = sizeof(g_rp_param_tbl)/sizeof(rp_app_params_t);
+	int num_updates = 0;
 
 	for(i = 0; i<len; i++)
 	{
@@ -482,7 +495,7 @@ static int acq_worker_init(void)
 	if(NULL != gp_acq_thread_handle)
 	{
 		LOG("%s: worker already initialized.\n",__func__);
-		return -1;
+		return 0;
 	}
 
 	gp_acq_thread_handle = (pthread_t*)malloc(sizeof(pthread_t));
@@ -492,9 +505,11 @@ static int acq_worker_init(void)
 	}
 
 	ret_val = pthread_create(gp_acq_thread_handle,NULL,
-							 acq_worker_thread,(void*)pthread_self());
+	                         acq_worker_thread,NULL);
 	if(0 != ret_val)
 	{
+		free(gp_acq_thread_handle);
+		gp_acq_thread_handle = NULL;
 		return -1;
 	}
 
@@ -504,69 +519,56 @@ static int acq_worker_init(void)
 static void* acq_worker_thread(void* arg)
 {
 	struct scope_parameter param;
-	int sock_fd;
+	int sock_fd = -1;
 	int ret_val;
-	pthread_t parent_pthread = (pthread_t)arg;
-
-	pthread_cleanup_push(acq_worker_cleanup_handler, &sock_fd);
 
 	if (scope_init(&param, &g_options))
 	{
 		LOG("%s: problem initializing scope.\n",__func__);
-		pthread_cancel(parent_pthread);
 		return NULL;
 	}
 
 	if ((sock_fd = connection_init(&g_options)) < 0)
 	{
 		ret_val = -1;
-		pthread_cancel(parent_pthread);
-		goto cleanup;
+		goto scopecleanup;
 	}
 
 	ret_val = transfer_data(sock_fd, &param, &g_options);
 	if(ret_val)
 	{
 		LOG("%s: problem transferring data.\n",__func__);
-		return NULL;
 	}
 
-	connection_cleanup(sock_fd);
+	connection_cleanup(*(int*)arg);
 
-cleanup:
+scopecleanup:
 	scope_cleanup(&param);
-
-	pthread_cleanup_pop(NULL);
 	return NULL;
 }
 
 static int acq_worker_exit(void)
 {
+	if(NULL == gp_acq_thread_handle)
+	{
+		LOG("%s: worker thread handle is NULL",__func__);
+		return 0;
+	}
 
-    if(NULL == gp_acq_thread_handle)
-    {
-    	LOG("%s: worker thread handle is NULL",__func__);
-    	return -1;
-    }
+	if(pthread_cancel(*gp_acq_thread_handle))
+	{
+		LOG("%s: problem sending SIGINT to worker thread.\n",__func__);
+		return -1;
+	}
 
-    if(pthread_cancel(*gp_acq_thread_handle))
-    {
-    	LOG("%s: problem sending SIGINT to worker thread.\n",__func__);
-    	return -1;
-    }
+	if(pthread_join(*gp_acq_thread_handle, NULL))
+	{
+		LOG("%s: unable to join worker thread.\n",__func__);
+		return -1;
+	}
 
-    if(pthread_join(*gp_acq_thread_handle, NULL))
-    {
-    	LOG("%s: unable to join worker thread.\n",__func__);
-    	return -1;
-    }
-
-    gp_acq_thread_handle = NULL;
+	free(gp_acq_thread_handle);
+	gp_acq_thread_handle = NULL;
 
 	return 0;
-}
-
-static void acq_worker_cleanup_handler(void* arg)
-{
-	connection_cleanup(*(int*)arg);
 }

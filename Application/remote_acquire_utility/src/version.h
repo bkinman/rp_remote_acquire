@@ -18,13 +18,13 @@
 
 #define XSTR(s) STR(s)
 #define STR(s) #s
- 
+
 #ifndef VERSION
 #define VERSION_STR "0.00-0000"
 #else
 #define VERSION_STR XSTR(VERSION)
 #endif
- 
+
 #ifndef REVISION
 #define REVISION_STR "unknown"
 #else
