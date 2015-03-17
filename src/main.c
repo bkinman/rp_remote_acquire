@@ -90,16 +90,24 @@ int main(int argc, char **argv)
 	if (scope_init(&param, &g_options))
 		return -1;
 
-	if (g_options.mode == client || g_options.mode == server)
-		if ((sock_fd = connection_init(&g_options)) < 0) {
-			retval = -1;
-			goto cleanup;
+	do
+	{
+		if (g_options.mode == client || g_options.mode == server)
+		{
+			if ((sock_fd = connection_init(&g_options)) < 0)
+			{
+				retval = -1;
+				goto cleanup;
+			}
 		}
 
-	retval = transfer_data(sock_fd, &param, &g_options);
+		retval = transfer_data(sock_fd, &param, &g_options);
 
-	if (g_options.mode == client || g_options.mode == server)
-		connection_cleanup(sock_fd);
+		if (g_options.mode == client || g_options.mode == server)
+			connection_cleanup();
+
+		printf("interrupted?: %d\n", transfer_interrupted());
+	} while(!transfer_interrupted());
 
 cleanup:
 	scope_cleanup(&param);

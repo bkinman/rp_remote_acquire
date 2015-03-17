@@ -119,6 +119,13 @@ int connection_init(option_fields_t *options)
 	{
 		socklen_t clilen;
 		server.sin_addr.s_addr = INADDR_ANY;
+
+		int optval = 1;
+		if(setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)))
+		{
+			fprintf(stderr, "setsockopt failed, %s\n", strerror(errno));
+		}
+
 		if (bind(sock_fd, (struct sockaddr *) &server, sizeof(server)) < 0)
 		{
 			fprintf(stderr, "bind failed, %s\n",strerror(errno));
@@ -162,7 +169,7 @@ error:
 	return -1;
 }
 
-void connection_cleanup(int sock_fd)
+void connection_cleanup(void)
 {
 	if (sa_set) {
 		sigaction(SIGINT, &oldsa, NULL);
@@ -214,11 +221,17 @@ int transfer_data(int sock_fd, struct scope_parameter *param,
 	return retval;
 }
 
+int transfer_interrupted(void)
+{
+	return interrupted;
+}
+
 /******************************************************************************
  * static function definitions
  ******************************************************************************/
 static void int_handler(int sig)
 {
+	printf("Int handler called.\n");
 	interrupted = 1;
 }
 
@@ -399,7 +412,7 @@ static int send_buffer(int sock_fd, const char *buf, size_t len)
 	unsigned int pos;
 
 	for (pos = 0; pos < len; pos += sent) {
-		sent = send(sock_fd, buf + pos, len - pos, 0);
+		sent = send(sock_fd, buf + pos, len - pos, MSG_NOSIGNAL);
 		if (sent < 0 || interrupted) {
 			retval = -1;
 			break;

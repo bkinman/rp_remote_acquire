@@ -39,8 +39,10 @@
  * otherwise returns return client socket file descriptor
  */
 int connection_init(option_fields_t *options);
-void connection_cleanup(int sock_fd);
+void connection_cleanup();
 int transfer_data(int sock_fd, struct scope_parameter *param,
                   option_fields_t *options);
+
+int transfer_interrupted(void);
 
 #endif /* TRANSFER_H_ */
