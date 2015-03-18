@@ -106,7 +106,6 @@ int main(int argc, char **argv)
 		if (g_options.mode == client || g_options.mode == server)
 			connection_cleanup();
 
-		printf("interrupted?: %d\n", transfer_interrupted());
 	} while(!transfer_interrupted());
 
 cleanup:
