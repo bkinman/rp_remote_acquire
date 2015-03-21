@@ -1,14 +1,12 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <pthread.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <pthread.h>
 #include <signal.h>
 
 #include "main.h"
@@ -17,6 +15,7 @@
 #include "options.h"
 #include "scope.h"
 #include "transfer.h"
+#include "worker.h"
 
 
 /******************************************************************************
@@ -42,10 +41,6 @@ static int display_options(option_fields_t options_fields);
 
 static int start_acquisition(option_fields_t options_fields);
 static int stop_acquisition(void);
-
-static int acq_worker_init(void);
-static int acq_worker_exit(void);
-static void* acq_worker_thread(void* arg);
 
 
 /******************************************************************************
@@ -73,12 +68,10 @@ static rp_app_params_t g_rp_param_tbl[] =
 
 static option_fields_t g_options = {{0}};
 
-static int g_acquisition_started = 0;
-
-static struct scope_parameter g_scope_parameters;
-
-/* for the acq worker thread */
-static pthread_t* gp_acq_thread_handle = NULL;
+static struct worker_state worker = {
+	.mux = PTHREAD_MUTEX_INITIALIZER,
+	.state = dead,
+};
 
 /******************************************************************************
  * non-static function definitions
@@ -110,6 +103,7 @@ int rp_app_init(void)
 	                               &g_options);
 
 	display_options(g_options);
+	worker.options = &g_options;
 
 	if(0 != result)
 	{
@@ -125,10 +119,8 @@ int rp_app_exit(void)
 
 	LOG("Unloading Remote Acquisition Utility.\n");
 
-	if (g_acquisition_started) {
+	if (worker.state != dead)
 		result = stop_acquisition();
-		g_acquisition_started = false;
-	}
 
 	LOG("Unloading kernel module: ");
 	result = system("rmmod rpad.ko");
@@ -181,27 +173,13 @@ int rp_set_params(rp_app_params_t *p, int len)
 
 	if(NULL != p_is_started_param)
 	{
-		if((1 == p_is_started_param->value) && !g_acquisition_started)
-		{
-			if(0 == start_acquisition(g_options))
-			{
-				g_acquisition_started = true;
-			}
-			else
-			{
+		if (p_is_started_param->value && worker.state != running) {
+			if (start_acquisition(g_options))
 				LOG("%s: Unable to start acquisition.\n",__func__);
-			}
 		}
-		else if(((0 == p_is_started_param->value) && g_acquisition_started))
-		{
-			if(0 == stop_acquisition())
-			{
-				g_acquisition_started = false;
-			}
-			else
-			{
+		else if (!p_is_started_param->value && worker.state == running) {
+			if (stop_acquisition())
 				LOG("%s: Unable to stop acquisition.\n",__func__);
-			}
 		}
 	}
 
@@ -460,14 +438,7 @@ static int start_acquisition(option_fields_t options_fields)
 {
 	LOG("%s: starting acquisition!\n",__func__);
 
-	if(scope_init(&g_scope_parameters,&g_options))
-	{
-		LOG("%s: problem initializing scope.\n",__func__);
-		return -1;
-	}
-
-	if(acq_worker_init())
-	{
+	if (acq_worker_init(&worker)) {
 		LOG("%s: problem initializing worker thread.\n",__func__);
 		return -1;
 	}
@@ -479,96 +450,10 @@ static int stop_acquisition(void)
 {
 	LOG("%s: stopping acquisition!\n",__func__);
 
-	if(acq_worker_exit())
-	{
+	if (acq_worker_exit(&worker)) {
 		LOG("%s: problem exiting worker thread.\n",__func__);
 		return -1;
 	}
-
-	return 0;
-}
-
-static int acq_worker_init(void)
-{
-	int ret_val;
-
-	if(NULL != gp_acq_thread_handle)
-	{
-		LOG("%s: worker already initialized.\n",__func__);
-		return 0;
-	}
-
-	gp_acq_thread_handle = (pthread_t*)malloc(sizeof(pthread_t));
-	if(NULL == gp_acq_thread_handle)
-	{
-		return -1;
-	}
-
-	ret_val = pthread_create(gp_acq_thread_handle,NULL,
-	                         acq_worker_thread,NULL);
-	if(0 != ret_val)
-	{
-		free(gp_acq_thread_handle);
-		gp_acq_thread_handle = NULL;
-		return -1;
-	}
-
-	return 0;
-}
-
-static void* acq_worker_thread(void* arg)
-{
-	struct scope_parameter param;
-	int sock_fd = -1;
-	int ret_val;
-
-	if (scope_init(&param, &g_options))
-	{
-		LOG("%s: problem initializing scope.\n",__func__);
-		return NULL;
-	}
-
-	if ((sock_fd = connection_init(&g_options)) < 0)
-	{
-		ret_val = -1;
-		goto scopecleanup;
-	}
-
-	ret_val = transfer_data(sock_fd, &param, &g_options);
-	if(ret_val)
-	{
-		LOG("%s: problem transferring data.\n",__func__);
-	}
-
-	connection_cleanup(*(int*)arg);
-
-scopecleanup:
-	scope_cleanup(&param);
-	return NULL;
-}
-
-static int acq_worker_exit(void)
-{
-	if(NULL == gp_acq_thread_handle)
-	{
-		LOG("%s: worker thread handle is NULL",__func__);
-		return 0;
-	}
-
-	if(pthread_cancel(*gp_acq_thread_handle))
-	{
-		LOG("%s: problem sending SIGINT to worker thread.\n",__func__);
-		return -1;
-	}
-
-	if(pthread_join(*gp_acq_thread_handle, NULL))
-	{
-		LOG("%s: unable to join worker thread.\n",__func__);
-		return -1;
-	}
-
-	free(gp_acq_thread_handle);
-	gp_acq_thread_handle = NULL;
 
 	return 0;
 }

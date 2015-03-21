@@ -83,33 +83,46 @@ int main(int argc, char **argv)
 	if(0 != handle_options(argc,argv, &g_options))
 	{
 		usage();
-		exit(1);
+		return 1;
 	}
 
+	signal_init();
 
-	if (scope_init(&param, &g_options))
-		return -1;
+	if (scope_init(&param, &g_options)) {
+		retval = 2;
+		goto cleanup;
+	}
 
-	do
-	{
-		if (g_options.mode == client || g_options.mode == server)
-		{
-			if ((sock_fd = connection_init(&g_options)) < 0)
-			{
-				retval = -1;
-				goto cleanup;
+	if (g_options.mode == client || g_options.mode == server) {
+		if (connection_init(&g_options)) {
+			retval = 3;
+			goto cleanup_scope;
+		}
+	}
+
+	retval = 0;
+	while (!transfer_interrupted()) {
+		if (g_options.mode == client || g_options.mode == server) {
+			if ((sock_fd = connection_start(&g_options)) < 0) {
+				fprintf(stderr, "%s: problem opening connection.\n", __func__);
+				continue;
 			}
 		}
 
 		retval = transfer_data(sock_fd, &param, &g_options);
+		if (retval && !transfer_interrupted())
+			fprintf(stderr, "%s: problem transferring data.\n", __func__);
 
 		if (g_options.mode == client || g_options.mode == server)
-			connection_cleanup();
+			connection_stop();
+	}
 
-	} while(!transfer_interrupted());
+	connection_cleanup();
 
-cleanup:
+cleanup_scope:
 	scope_cleanup(&param);
+cleanup:
+	signal_exit();
 
 	return retval;
 }

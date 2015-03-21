@@ -1,12 +1,12 @@
 /*
- * transfer.h
+ * worker.h
  *
- *  Created on: 9 Jun 2014
+ *  Created on: 20 Mar 2015
  *      Author: nils
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2014 bkinman, Nils Roos
+ * Copyright (c) 2015 bkinman, Nils Roos
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,23 +27,21 @@
  * SOFTWARE.
  */
 
-#ifndef TRANSFER_H_
-#define TRANSFER_H_
+#ifndef WORKER_H_
+#define WORKER_H_
 
-#include <stdlib.h>
+#include <pthread.h>
 
 #include "options.h"
-#include "scope.h"
 
-void signal_init(void);
-void signal_exit(void);
-int connection_init(option_fields_t *options);
-int connection_start(option_fields_t *options);
-void connection_stop();
-void connection_cleanup();
-int transfer_data(int sock_fd, struct scope_parameter *param,
-                  option_fields_t *options);
+struct worker_state {
+	pthread_mutex_t mux;
+	pthread_t       thread_handle;
+	enum {running, cancelled, dead} state;
+	struct option_fields_ *options;
+};
 
-int transfer_interrupted(void);
+int acq_worker_init(struct worker_state *);
+int acq_worker_exit(struct worker_state *);
 
-#endif /* TRANSFER_H_ */
+#endif /* WORKER_H_ */

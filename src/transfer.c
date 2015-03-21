@@ -27,9 +27,6 @@
  * SOFTWARE.
  */
 
-/* _GNU_SOURCE provides splice() and vmsplice(), which are Linux kernel
- * specific portions of GNU's libc runtime.
- */
 #include <stddef.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -81,107 +78,129 @@ static struct sigaction sa = {
 };
 
 static int sock_fd = -1;
-static int client_sock_fd = -1;
+static int server_sock_fd = -1;
+static struct sockaddr_in srv_addr, cli_addr;
 
 /******************************************************************************
  * non-static function definitions
  ******************************************************************************/
+void signal_init(void) {
+	if (!sigaction(SIGINT, &sa, &oldsa))
+		sa_set = 1;
+	else
+		fprintf(stderr, "configuring signals failed (non-fatal), %s\n", strerror(errno));
+}
+
+void signal_exit(void) {
+	if (sa_set) {
+		sigaction(SIGINT, &oldsa, NULL);
+		sa_set = 0;
+	}
+}
+
+/*
+ * initializes socket according to options
+ * returns 0 on success, <0 on error
+ */
 int connection_init(option_fields_t *options)
 {
-	struct sockaddr_in server, cli_addr;
-	int rc;
-
-	printf("Creating %s %s\n", options->tcp ? "TCP" : "UDP",
-	       (options->mode == client) ? "CLIENT" : "SERVER");
-
 	sock_fd = socket(PF_INET, options->tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
-
 	if (sock_fd < 0) {
 		fprintf(stderr, "create socket failed, %s\n", strerror(errno));
 		goto error;
 	}
 
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = inet_addr(options->address);
-	server.sin_port = htons(options->port);
+	memset(&srv_addr, 0, sizeof(srv_addr));
+	srv_addr.sin_family = AF_INET;
+	srv_addr.sin_addr.s_addr = inet_addr(options->address);
+	srv_addr.sin_port = htons(options->port);
 
-	if (options->mode == client) {
-		printf("connecting to %s:%i\n", options->address, options->port);
-
-		rc = connect(sock_fd, (struct sockaddr *)&server, sizeof(server));
-		if (rc < 0)
-		{
-			fprintf(stderr, "connect failed, %s\n", strerror(errno));
-			goto error_close;
-		}
-	}
-	else
-	{
-		socklen_t clilen;
-		server.sin_addr.s_addr = INADDR_ANY;
-
+	if (options->mode == server) {
 		int optval = 1;
-		if(setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)))
-		{
+
+		srv_addr.sin_addr.s_addr = INADDR_ANY;
+
+		if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval))) {
 			fprintf(stderr, "setsockopt failed, %s\n", strerror(errno));
 		}
 
-		if (bind(sock_fd, (struct sockaddr *) &server, sizeof(server)) < 0)
-		{
-			fprintf(stderr, "bind failed, %s\n",strerror(errno));
+		if (bind(sock_fd, (struct sockaddr *) &srv_addr, sizeof(srv_addr))) {
+			fprintf(stderr, "bind failed, %s\n", strerror(errno));
 			goto error_close;
 		}
-		if(listen(sock_fd,5) < 0)
-		{
-			fprintf(stderr, "listen failed, %s\n",strerror(errno));
+		if (listen(sock_fd, 5)) {
+			fprintf(stderr, "listen failed, %s\n", strerror(errno));
 			goto error_close;
 		}
 
-		clilen = sizeof(cli_addr);
-		client_sock_fd = accept(sock_fd, (struct sockaddr *) &cli_addr, &clilen);
-		if(client_sock_fd < 0)
-		{
-			fprintf(stderr, "accept failed, %s\n",strerror(errno));
-			goto error_close;
-		}
+		server_sock_fd = sock_fd;
+		sock_fd = -1;
 	}
 
-	if (!sigaction(SIGINT, &sa, &oldsa))
-		sa_set = 1;
-	else
-		fprintf(stderr, "configuring signals failed (non-fatal), %s\n", strerror(errno));
-
-	if (options->mode == client)
-		return sock_fd;
-	else
-		return client_sock_fd;
+	return 0;
 
 error_close:
 	if (sock_fd >= 0) {
 		close(sock_fd);
 		sock_fd = -1;
 	}
-	if (client_sock_fd >= 0) {
-		close(client_sock_fd);
-		client_sock_fd = -1;
+error:
+	return -1;
+}
+
+int connection_start(option_fields_t *options)
+{
+	if (options->mode == client) {
+		if (sock_fd < 0) {
+			sock_fd = socket(PF_INET, options->tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
+			if (sock_fd < 0) {
+				fprintf(stderr, "create socket failed, %s\n", strerror(errno));
+				goto error;
+			}
+
+			usleep(100000); /* sleep 0.1s before reconnecting */
+		}
+
+		if (connect(sock_fd, (struct sockaddr *)&srv_addr, sizeof(srv_addr)) < 0) {
+			fprintf(stderr, "connect failed, %s\n", strerror(errno));
+			goto error_close;
+		}
+	} else {
+		socklen_t cli_len = sizeof(cli_addr);
+
+		sock_fd = accept(server_sock_fd, (struct sockaddr *)&cli_addr, &cli_len);
+		if (sock_fd < 0) {
+			fprintf(stderr, "accept failed, %s\n", strerror(errno));
+			goto error;
+		}
+	}
+
+	return sock_fd;
+
+error_close:
+	if (sock_fd >= 0) {
+		close(sock_fd);
+		sock_fd = -1;
 	}
 error:
 	return -1;
 }
 
+void connection_stop(void)
+{
+	close(sock_fd);
+	sock_fd = -1;
+}
+
 void connection_cleanup(void)
 {
-	if (sa_set) {
-		sigaction(SIGINT, &oldsa, NULL);
-		sa_set = 0;
-	}
 	if (sock_fd >= 0) {
 		close(sock_fd);
 		sock_fd = -1;
 	}
-	if (client_sock_fd >= 0) {
-		close(client_sock_fd);
-		client_sock_fd = -1;
+	if (server_sock_fd >= 0) {
+		close(server_sock_fd);
+		server_sock_fd = -1;
 	}
 }
 
@@ -231,7 +250,6 @@ int transfer_interrupted(void)
  ******************************************************************************/
 static void int_handler(int sig)
 {
-	printf("Int handler called.\n");
 	interrupted = 1;
 }
 
