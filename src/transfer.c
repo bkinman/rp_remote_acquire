@@ -39,9 +39,11 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/uio.h>
+/*#include <sys/ioctl.h>*/
 
 #include "options.h"
 #include "scope.h"
+/*#include "dev_scope.h"*/
 
 #include <stdlib.h>
 #include <string.h>
@@ -66,6 +68,8 @@ static u_int64_t transfer_mmap(int sock_fd, struct scope_parameter *param,
 static u_int64_t transfer_mmapfile(struct scope_parameter *param,
                                    option_fields_t *options);
 static int send_buffer(int sock_fd, const char *buf, size_t len);
+/*static u_int64_t transfer_irq(int sock_fd, struct scope_parameter *param,
+                              option_fields_t *options);*/
 
 /******************************************************************************
  * static variables
@@ -217,12 +221,14 @@ int transfer_data(int sock_fd, struct scope_parameter *param,
 		report_rate = 0;
 
 	if (options->mode == client || options->mode == server) {
-		if (0) // TODO depending on mmap success
+		if (0) /* TODO depending on mmap success */
 			transferred = transfer_readwrite(sock_fd, param, options);
-		else
+		else if (1)
 			transferred = transfer_mmap(sock_fd, param, options);
+		/*else
+			transferred = transfer_irq(sock_fd, param, options);*/
 	} else if (options->mode == file) {
-		if (0) // TODO depending on mmap success
+		if (0) /* TODO depending on mmap success */
 			/*transferred = transfer_readwritefile(sock_fd, param, options)*/;
 		else
 			transferred = transfer_mmapfile(param, options);
@@ -333,7 +339,15 @@ static u_int64_t transfer_mmap(int sock_fd, struct scope_parameter *param,
 		}
 
 		/* copy to cacheable buffer, shortens socket overhead by ~75% */
-		memcpy(buf, mapped_base + pos, len);
+		if (options->shrink_to_8bit) {
+			int c;
+			char *t = buf, *s = mapped_base + pos + 1;
+			len >>= 1;
+			for (c = len; c--; s += 2)
+				*(t++) = *s;
+			pos += len;
+		} else
+			memcpy(buf, mapped_base + pos, len);
 
 		if (send_buffer(sock_fd, buf, len) < 0) {
 			if (!interrupted)
@@ -439,3 +453,26 @@ static int send_buffer(int sock_fd, const char *buf, size_t len)
 
 	return retval;
 }
+
+/*static u_int64_t transfer_irq(int sock_fd, struct scope_parameter *param,
+                              option_fields_t *options)
+{
+	struct scope_state state;
+
+	ioctl(param->scope_fd, IOCTL_STREAM_STATUS, &state);
+	printf("irqs: %d\n", state.irqs);
+
+	ioctl(param->scope_fd, IOCTL_STREAM_START, &sock_fd);
+
+	while (!interrupted)
+		usleep(10000);
+
+	ioctl(param->scope_fd, IOCTL_STREAM_STOP);
+
+	ioctl(param->scope_fd, IOCTL_STREAM_STATUS, &state);
+	printf("irqs: %d\n", state.irqs);
+	printf("errs: %d\n", state.errors);
+	printf("sent: %llu\n", state.transmitted);
+
+	return state.transmitted;
+}*/

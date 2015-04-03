@@ -69,6 +69,7 @@ static option_fields_t g_options =
 	.scope_equalizer = 1,
 	.scope_hv = 0,
 	.scope_shaping = 1,
+	.shrink_to_8bit = 0,
 };
 
 /******************************************************************************
@@ -82,7 +83,7 @@ int main(int argc, char **argv)
 
 	if(0 != handle_options(argc,argv, &g_options))
 	{
-		usage();
+		usage(argv[0]);
 		return 1;
 	}
 
@@ -115,6 +116,9 @@ int main(int argc, char **argv)
 
 		if (g_options.mode == client || g_options.mode == server)
 			connection_stop();
+
+		if (g_options.mode == file)
+			break;
 	}
 
 	connection_cleanup();

@@ -50,11 +50,12 @@ struct option_fields_
 	int scope_hv;
 	int scope_equalizer;
 	int scope_shaping;
+	int shrink_to_8bit;
 };
 typedef struct option_fields_ option_fields_t;
 
 int handle_options(int argc, char *argv[], option_fields_t *options);
 int check_options(option_fields_t *options);
-void usage(void);
+void usage(const char *);
 
 #endif /* OPTIONS_H_ */

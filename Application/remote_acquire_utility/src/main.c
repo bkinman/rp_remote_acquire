@@ -174,12 +174,16 @@ int rp_set_params(rp_app_params_t *p, int len)
 	if(NULL != p_is_started_param)
 	{
 		if (p_is_started_param->value && worker.state != running) {
-			if (start_acquisition(g_options))
+			if (start_acquisition(g_options)) {
 				LOG("%s: Unable to start acquisition.\n",__func__);
+				p_is_started_param->value = 0;
+			}
 		}
 		else if (!p_is_started_param->value && worker.state == running) {
-			if (stop_acquisition())
+			if (stop_acquisition()) {
 				LOG("%s: Unable to stop acquisition.\n",__func__);
+				p_is_started_param->value = 1;
+			}
 		}
 	}
 

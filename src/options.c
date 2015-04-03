@@ -52,6 +52,7 @@ static struct option g_long_options[] =
 	{"scope-HV",           no_argument,       NULL, 1  },
 	{"scope-no-equalizer", no_argument,       NULL, 'e'},
 	{"scope-no-shaping",   no_argument,       NULL, 's'},
+	{"byte",               no_argument,       NULL, 'b'},
 	{NULL, 0, NULL, 0}
 };
 
@@ -63,7 +64,10 @@ int handle_options(int argc, char *argv[], option_fields_t *options)
 	int ch;
 	int mode;
 
-	while ((ch = getopt_long(argc, argv, "a:p:m:uk:f:rhc:d:es", g_long_options, NULL)) != -1)
+	if (argc <= 1)
+		return -1;
+
+	while ((ch = getopt_long(argc, argv, "a:p:m:uk:f:rhc:d:esb", g_long_options, NULL)) != -1)
 	{
 		// check to see if a single character or long option came through
 		switch (ch)
@@ -116,6 +120,9 @@ int handle_options(int argc, char *argv[], option_fields_t *options)
 		case 's': // disable shaping filter
 			options->scope_shaping = 0;
 			break;
+		case 'b': // write bytes
+			options->shrink_to_8bit = 1;
+			break;
 		case '?':
 		case 'h':
 		default:
@@ -150,23 +157,42 @@ int check_options(option_fields_t *options)
 	return 0;
 }
 
-void usage(void)
+void usage(const char *name)
 {
-	printf("Usage:  rp_remote_acquire [-apmukfrhcdes]\n");
-	printf("  -a  --address ip_address target address in client mode\n"
-	       "  -p  --port port_num port number\n"
-	       "  -m  --mode ((1|client)|(2|server)|(3|file))\n"
-	       "  -u  --udp indicates tool should use udp mode\n"
-	       "  -k  --kbytes_to_transfer num_kbytes number of kilobytes to transfer\n"
-	       "  -f  --fname target file name for mode file\n"
-	       "  -r  --report-rate turn on rate reporting\n"
-	       "  -h  --help Display this usage information\n"
-	       "  -c  --scope-channel channel ((0|A)|(1|B))\n"
-	       "  -d  --scope-decimation decimation 0,1,2,4,..,65536\n"
-	       "  -e  --scope-no-equalizer disable equalization filter\n"
-	       "      --scope-HV enable HV equalizer settings\n"
-	       "  -s  --scope-no-shaping disable shaping filter\n"
+	printf("Usage: \033[1m%s [-mapukfrhcdesb]\033[0m\n", name);
+	printf("\033[1m-m  --mode <(1|client)|(2|server)|(3|file)>\033[0m\n"
+	       "\toperating mode (default client)\n"
+	       "\033[1m-a  --address <ip_address>\033[0m\n"
+	       "\ttarget address in client mode (default empty)\n"
+	       "\033[1m-p  --port <port_num>\033[0m\n"
+	       "\tport number in client and server mode (default 14000)\n"
+	       "\033[1m-u  --udp\033[0m\n"
+	       "\tindicates tool should use udp transfer (default tcp)\n"
+	       "\033[1m-k  --kbytes_to_transfer <num_kbytes>\033[0m\n"
+	       "\tkilobytes to transfer (default 0 = unlimited)\n"
+	       "\033[1m-f  --fname <target>\033[0m\n"
+	       "\ttarget file name in file mode (default /tmp/out)\n"
+	       "\033[1m-r  --report-rate\033[0m\n"
+	       "\tturn on rate reporting (default off)\n"
+	       "\033[1m-h  --help\033[0m\n"
+	       "\tdisplay this usage information\n"
+	       "\033[1m-c  --scope-channel <(0|A)|(1|B)>\033[0m\n"
+	       "\tscope channel (default A)\n"
+	       "\033[1m-d  --scope-decimation <decimation>\033[0m\n"
+	       "\t0,1,2,4,..,65536 (default 32)\n"
+	       "\033[1m-e  --scope-no-equalizer\033[0m\n"
+	       "\tdisable equalization filter (default enabled)\n"
+	       "\033[1m    --scope-HV\033[0m\n"
+	       "\tenable HV equalizer settings (default LV)\n"
+	       "\033[1m-s  --scope-no-shaping\033[0m\n"
+	       "\tdisable shaping filter (default enabled)\n"
+	       "\033[1m-b  --byte\033[0m\n"
+	       "\treduce resolution to 8 bit (experimental, default off)\n"
 	       "\n");
 	printf("Examples:\n");
-	printf("\t Insert example here\n");
+	printf("\033[1m%s -m 1 -a 192.168.1.1 -p 1234 -k 0 -c 0 -d 64\033[0m\n"
+	       "\tconnects to a server on 192.168.1.1:1234 and streams samples from\n"
+	       "\tchannel A for an unlimited time (until interrupted) at 1.953MSps\n", name);
+	printf("\033[1m%s -m file -k 1024 -c 1 -d 4 -f /tmp/out.dat\033[0m\n"
+	       "\twrites 1024kB from channel B to the file /tmp/out.dat at 31.25MSps\n", name);
 }
